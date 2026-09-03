@@ -13,20 +13,19 @@
             <ListView ItemsSource="{x:Bind Collections}" IsItemClickEnabled="True" ItemClick="CollectionsList_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:PhotoCollection">
-                        <Border Background="{ThemeResource SurfaceBackgroundBrush}" BorderBrush="{ThemeResource SurfaceBorderBrush}"
-                                BorderThickness="0,0,0,1" Padding="12">
+                        <Border Style="{StaticResource LiveDriveListRowStyle}">
                             <StackPanel>
                                 <TextBlock Text="{x:Bind Title}" FontSize="17"/>
-                                <TextBlock Text="{x:Bind CountLabel}" Foreground="{ThemeResource MutedTextBrush}" Margin="0,4,0,0"/>
+                                <TextBlock Text="{x:Bind CountLabel}" Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <TextBlock Text="No photo collections yet." FontSize="18" HorizontalAlignment="Center"/>
-                <TextBlock Text="Open Photos once to build the local photo index." Opacity="0.65"
-                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+                <TextBlock Text="No photo collections yet." Style="{StaticResource LiveDriveStateTitleStyle}"/>
+                <TextBlock Text="Open Photos once to build the local photo index."
+                           Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
         </Grid>
     </Grid>

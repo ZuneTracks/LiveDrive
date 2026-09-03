@@ -10,32 +10,35 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <TextBlock Text="Search drive" Style="{StaticResource LiveDrivePageTitleStyle}"/>
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,12">
-            <TextBox x:Name="SearchTextBox" PlaceholderText="Find files and folders" Width="300"
-                     KeyDown="SearchTextBox_KeyDown"/>
-            <Button Content="Search" Click="SearchButton_Click" Margin="8,0,0,0" Style="{StaticResource LiveDrivePrimaryButtonStyle}"/>
-        </StackPanel>
+        <Grid Grid.Row="1" Margin="0,4,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SearchTextBox" PlaceholderText="Find files and folders" KeyDown="SearchTextBox_KeyDown"/>
+            <Button Grid.Column="1" Content="Search" Click="SearchButton_Click" Margin="8,0,0,0"
+                    Style="{StaticResource LiveDrivePrimaryButtonStyle}"/>
+        </Grid>
         <Grid Grid.Row="2">
             <ListView x:Name="ResultsList" ItemsSource="{x:Bind Results}">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:DriveItem">
-                        <Border Background="{ThemeResource SurfaceBackgroundBrush}" BorderBrush="{ThemeResource SurfaceBorderBrush}"
-                                BorderThickness="0,0,0,1" Padding="8">
+                        <Border Style="{StaticResource LiveDriveListRowStyle}">
                             <StackPanel>
                                 <TextBlock Text="{x:Bind Name}" FontSize="16"/>
-                                <TextBlock Text="{x:Bind TypeLabel}" Foreground="{ThemeResource MutedTextBrush}"/>
+                                <TextBlock Text="{x:Bind TypeLabel}" Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
             <StackPanel x:Name="LoadingPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <ProgressRing IsActive="True" Width="40" Height="40"/>
-                <TextBlock Text="Searching…" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                <ProgressRing IsActive="True" Width="28" Height="28"/>
+                <TextBlock Text="Searching…" Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Search across your OneDrive." FontSize="18" HorizontalAlignment="Center"/>
-                <TextBlock Text="Sign in first, then enter a file or folder name." Opacity="0.65" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+                <TextBlock Text="Search across your OneDrive." Style="{StaticResource LiveDriveStateTitleStyle}"/>
+                <TextBlock Text="Sign in first, then enter a file or folder name." Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
         </Grid>
     </Grid>
