@@ -69,3 +69,4 @@ LiveDrive is not affiliated with Microsoft and does not attempt to replicate Mic
 - Stores Photos cache data, thumbnail cache data, and recent camera-upload names in LiveDrive's private local storage.
 - Clears the local photo index and camera-upload history when the user signs in or signs out.
 - Applies theme preference changes on the next LiveDrive launch for compatibility with the supported Mobile platform.
+- Provides an About panel with LiveDrive's independent-app disclaimer, installed build version, and ZuneTracks project link.
