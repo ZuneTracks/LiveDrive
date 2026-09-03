@@ -57,39 +57,39 @@
                 </GridView.ItemContainerStyle>
                 <GridView.ItemsPanel>
                     <ItemsPanelTemplate>
-                       <ItemsWrapGrid Orientation="Horizontal" ItemWidth="144" ItemHeight="174"/>
+                       <ItemsWrapGrid Orientation="Horizontal" ItemWidth="144" ItemHeight="166"/>
                     </ItemsPanelTemplate>
                 </GridView.ItemsPanel>
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:DriveItem">
-                       <Grid Margin="4" Tag="{x:Bind}" Holding="PhotoTile_Holding">
-                            <Border Background="{ThemeResource PhotoTileBackgroundBrush}" CornerRadius="4">
+                       <Grid Margin="2" Tag="{x:Bind}" Holding="PhotoTile_Holding">
+                           <Border Background="{ThemeResource PhotoTileBackgroundBrush}">
                                 <Grid>
                                     <SymbolIcon Symbol="Pictures" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
                                     <Image Source="{Binding ThumbnailUrl, Converter={StaticResource ThumbnailConverter}}"
                                            Stretch="UniformToFill"/>
                                 </Grid>
                             </Border>
-                            <Border VerticalAlignment="Bottom" Background="#AA000000" Padding="6,4">
-                                <TextBlock Text="{x:Bind Name}" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                            <Border VerticalAlignment="Bottom" Background="#99000000" Padding="6,3">
+                                <TextBlock Text="{x:Bind Name}" Foreground="White" FontSize="12" TextTrimming="CharacterEllipsis"/>
                             </Border>
                         </Grid>
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>
             <StackPanel x:Name="LoadingPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <ProgressRing IsActive="True" Width="40" Height="40"/>
-                <TextBlock x:Name="LoadingText" Text="Loading your photos…" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                <ProgressRing IsActive="True" Width="28" Height="28"/>
+                <TextBlock x:Name="LoadingText" Text="Loading your photos…" Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <TextBlock x:Name="EmptyTitle" Text="No photos found." FontSize="18" HorizontalAlignment="Center"/>
-                <TextBlock x:Name="EmptyDescription" Text="Photos in your selected OneDrive folders will appear here." Opacity="0.65"
-                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+                <TextBlock x:Name="EmptyTitle" Text="No photos found." Style="{StaticResource LiveDriveStateTitleStyle}"/>
+                <TextBlock x:Name="EmptyDescription" Text="Photos in your selected OneDrive folders will appear here."
+                           Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
         </Grid>
-        <Border x:Name="SyncStatusPanel" Grid.Row="3" Background="{ThemeResource SurfaceBackgroundBrush}"
+        <Border x:Name="SyncStatusPanel" Grid.Row="3" Background="Transparent"
                 BorderBrush="{ThemeResource SurfaceBorderBrush}" BorderThickness="0,1,0,0"
-                Padding="8" Visibility="Collapsed">
+                Padding="0,10,0,0" Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">
                 <ProgressRing IsActive="True" Width="18" Height="18" Margin="0,0,8,0"/>
                 <TextBlock x:Name="SyncStatusText" VerticalAlignment="Center" Foreground="{ThemeResource MutedTextBrush}"/>

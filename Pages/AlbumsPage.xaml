@@ -18,20 +18,19 @@
             <ListView ItemsSource="{x:Bind Albums}" IsItemClickEnabled="True" ItemClick="AlbumsList_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:PhotoAlbum">
-                        <Border Background="{ThemeResource SurfaceBackgroundBrush}" BorderBrush="{ThemeResource SurfaceBorderBrush}"
-                                BorderThickness="0,0,0,1" Padding="12">
+                        <Border Style="{StaticResource LiveDriveListRowStyle}">
                             <StackPanel>
                                 <TextBlock Text="{x:Bind Name}" FontSize="17"/>
-                                <TextBlock Text="{x:Bind ItemCountLabel}" Foreground="{ThemeResource MutedTextBrush}" Margin="0,4,0,0"/>
+                                <TextBlock Text="{x:Bind ItemCountLabel}" Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <TextBlock Text="No LiveDrive albums yet." FontSize="18" HorizontalAlignment="Center"/>
-                <TextBlock Text="Create an album, then select photos to add from the Photos page." Opacity="0.65"
-                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+                <TextBlock Text="No LiveDrive albums yet." Style="{StaticResource LiveDriveStateTitleStyle}"/>
+                <TextBlock Text="Create an album, then select photos to add from the Photos page."
+                           Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
         </Grid>
     </Grid>
