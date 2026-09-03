@@ -2,6 +2,12 @@
 
 LiveDrive is an independent, phone-friendly UWP prototype for browsing a personal OneDrive through Microsoft Graph. It targets **Windows 10 version 1703 (build 15063)** and uses `HttpClient` instead of Graph SDK packages so its platform floor stays compatible with Windows 10 Mobile.
 
+## Public documents
+
+- [App description and feature set](APP_DESCRIPTION.md)
+- [Privacy Policy](PRIVACY.md)
+- [Terms of Service](TERMS.md)
+
 ## Set up Microsoft sign-in
 
 1. In the [Microsoft Entra admin center](https://entra.microsoft.com/), register an application for **Accounts in any organizational directory and personal Microsoft accounts** (or choose the account type appropriate to your deployment).
