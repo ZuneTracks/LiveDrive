@@ -32,8 +32,7 @@
         <ListView x:Name="ItemsList" SelectionMode="Multiple" SelectionChanged="ItemsList_SelectionChanged">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:DriveItem">
-                        <Border Background="{ThemeResource SurfaceBackgroundBrush}" BorderBrush="{ThemeResource SurfaceBorderBrush}"
-                                BorderThickness="0,0,0,1" Padding="8">
+                        <Border Style="{StaticResource LiveDriveListRowStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -41,26 +40,26 @@
                             </Grid.ColumnDefinitions>
                             <SymbolIcon Symbol="{x:Bind IsFolder, Converter={StaticResource BooleanToSymbolConverter}}"/>
                             <StackPanel Grid.Column="1" Margin="12,0">
-                                <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{x:Bind Detail}" Opacity="0.65" FontSize="12"/>
+                                <TextBlock Text="{x:Bind Name}" FontSize="16" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Grid>
                         </Border>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-            <StackPanel x:Name="UploadProgressPanel" VerticalAlignment="Top" Background="{ThemeResource SurfaceBackgroundBrush}"
-                        Padding="12" Visibility="Collapsed">
+            <StackPanel x:Name="UploadProgressPanel" VerticalAlignment="Top" Background="{ThemeResource CalloutBackgroundBrush}"
+                        Padding="12" Margin="0,8,0,0" Visibility="Collapsed">
                 <TextBlock x:Name="UploadProgressText" Text="Uploading file…" Margin="0,0,0,6"/>
                 <ProgressBar x:Name="UploadProgress" Minimum="0" Maximum="1" Value="0"/>
             </StackPanel>
             <StackPanel x:Name="LoadingPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <ProgressRing IsActive="True" Width="40" Height="40"/>
-                <TextBlock Text="Loading your drive…" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                <ProgressRing IsActive="True" Width="28" Height="28"/>
+                <TextBlock Text="Loading your drive…" Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <TextBlock Text="This folder is empty." FontSize="18" HorizontalAlignment="Center"/>
-                <TextBlock Text="Use Upload to add a file from this phone." Opacity="0.65" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+                <TextBlock Text="This folder is empty." Style="{StaticResource LiveDriveStateTitleStyle}"/>
+                <TextBlock Text="Use Upload to add a file from this phone." Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
         </Grid>
     </Grid>

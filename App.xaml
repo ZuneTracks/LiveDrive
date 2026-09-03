@@ -8,7 +8,33 @@
             <Style x:Key="LiveDrivePageTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="28"/>
                 <Setter Property="FontWeight" Value="SemiLight"/>
-                <Setter Property="Margin" Value="0,0,0,4"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
+            <Style x:Key="LiveDriveSectionTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="20"/>
+                <Setter Property="FontWeight" Value="SemiLight"/>
+                <Setter Property="Margin" Value="0,16,0,6"/>
+            </Style>
+            <Style x:Key="LiveDriveMutedTextStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource MutedTextBrush}"/>
+                <Setter Property="FontSize" Value="13"/>
+            </Style>
+            <Style x:Key="LiveDriveListRowStyle" TargetType="Border">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{ThemeResource SurfaceBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="0,12"/>
+            </Style>
+            <Style x:Key="LiveDriveStateTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="17"/>
+                <Setter Property="FontWeight" Value="SemiLight"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+            </Style>
+            <Style x:Key="LiveDriveStateDescriptionStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource MutedTextBrush}"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="TextAlignment" Value="Center"/>
+                <Setter Property="Margin" Value="0,6,0,0"/>
             </Style>
             <Style x:Key="LiveDrivePrimaryButtonStyle" TargetType="Button">
                 <Setter Property="Background" Value="{StaticResource AppAccentBrush}"/>
@@ -21,6 +47,12 @@
                 <Setter Property="Foreground" Value="{ThemeResource ApplicationForegroundThemeBrush}"/>
                 <Setter Property="BorderBrush" Value="{ThemeResource SurfaceBorderBrush}"/>
                 <Setter Property="Padding" Value="14,8"/>
+            </Style>
+            <Style x:Key="LiveDriveQuietButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource AppAccentBrush}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="8"/>
             </Style>
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
