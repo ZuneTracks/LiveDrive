@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>LiveDrive logo mockups</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0f1d2b;
+      color: #ffffff;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+    main { max-width: 1060px; margin: 0 auto; padding: 42px 28px; }
+    h1 { margin: 0 0 8px; font-size: 32px; font-weight: 600; }
+    p { margin: 0 0 30px; color: #b9cee0; }
+    .board { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; align-items: start; }
+    figure { margin: 0; }
+    .preview {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 265px;
+      padding: 20px;
+      background: #19324a;
+    }
+    .primary .preview { min-height: 318px; padding: 0; }
+    img { display: block; max-width: 100%; max-height: 278px; }
+    figcaption { padding-top: 10px; font-size: 15px; color: #b9cee0; }
+    .light { background: #e9f2f9; }
+    @media (max-width: 720px) {
+      .board { grid-template-columns: 1fr; }
+      .primary .preview { min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>LiveDrive logo mockups</h1>
+    <p>Flat, two-tone phone-and-cloud concepts with original navigation symbols.</p>
+    <section class="board">
+      <figure class="primary">
+        <div class="preview"><img src="LiveDrive-logo-mockup.svg" alt="Primary LiveDrive logo"></div>
+        <figcaption>Primary logo</figcaption>
+      </figure>
+      <figure>
+        <div class="preview"><img src="LiveDrive-square-icon-mockup.svg" alt="Square LiveDrive tile icon"></div>
+        <figcaption>Square tile icon</figcaption>
+      </figure>
+      <figure>
+        <div class="preview light"><img src="LiveDrive-monochrome-icon-mockup.svg" alt="Monochrome LiveDrive icon"></div>
+        <figcaption>Monochrome icon</figcaption>
+      </figure>
+    </section>
+  </main>
+</body>
+</html>

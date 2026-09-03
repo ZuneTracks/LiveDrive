@@ -1,0 +1,38 @@
+<Page
+    x:Class="LiveDrive.Pages.AlbumsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:LiveDrive.Models">
+    <Grid Padding="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Albums" Style="{StaticResource LiveDrivePageTitleStyle}"/>
+        <CommandBar Grid.Row="1" DefaultLabelPosition="Right">
+            <AppBarButton Icon="Add" Label="New album" Click="NewAlbumButton_Click"/>
+            <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
+        </CommandBar>
+        <Grid Grid.Row="2">
+            <ListView ItemsSource="{x:Bind Albums}" IsItemClickEnabled="True" ItemClick="AlbumsList_ItemClick">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:PhotoAlbum">
+                        <Border Background="{ThemeResource SurfaceBackgroundBrush}" BorderBrush="{ThemeResource SurfaceBorderBrush}"
+                                BorderThickness="0,0,0,1" Padding="12">
+                            <StackPanel>
+                                <TextBlock Text="{x:Bind Name}" FontSize="17"/>
+                                <TextBlock Text="{x:Bind ItemCountLabel}" Foreground="{ThemeResource MutedTextBrush}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBlock Text="No LiveDrive albums yet." FontSize="18" HorizontalAlignment="Center"/>
+                <TextBlock Text="Create an album, then select photos to add from the Photos page." Opacity="0.65"
+                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

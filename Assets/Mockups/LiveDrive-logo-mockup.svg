@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480" role="img" aria-labelledby="title description">
+  <title id="title">LiveDrive logo mockup</title>
+  <desc id="description">A flat, two-tone phone with a white cloud on its screen and three generic navigation buttons along the bottom.</desc>
+  <rect width="800" height="480" fill="#0078D4"/>
+  <rect x="306" y="44" width="188" height="360" fill="#102A43"/>
+  <rect x="322" y="87" width="156" height="266" fill="#00A4EF"/>
+  <rect x="375" y="64" width="50" height="5" fill="#00A4EF"/>
+  <path d="M337 230c0-18 14-32 32-32 6 0 12 2 17 5 7-15 22-25 40-25 24 0 44 19 44 43v2c16 1 29 15 29 32 0 18-15 33-33 33H370c-18 0-33-15-33-33 0-11 5-20 13-26-8-6-13-16-13-27 0-15 12-27 27-27 9 0 17 4 22 11" fill="#FFF" transform="translate(400 220) scale(.70) translate(-418 -233)"/>
+  <text x="400" y="444" fill="#FFF" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="600" text-anchor="middle">LiveDrive</text>
+</svg>

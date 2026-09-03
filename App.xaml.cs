@@ -1,0 +1,73 @@
+using LiveDrive.Services;
+using Windows.ApplicationModel;
+using Windows.ApplicationModel.Activation;
+using Windows.Storage;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Navigation;
+
+namespace LiveDrive
+{
+    sealed partial class App : Application
+    {
+        private const string ThemeSettingKey = "AppTheme";
+
+        public App()
+        {
+            InitializeComponent();
+            RequestedTheme = ReadSavedTheme();
+            Services = new AppServices();
+            Suspending += OnSuspending;
+        }
+
+        public AppServices Services { get; }
+
+        public ApplicationTheme CurrentTheme => RequestedTheme;
+
+        public void SaveThemePreference(bool useDarkTheme)
+        {
+            var theme = useDarkTheme ? ApplicationTheme.Dark : ApplicationTheme.Light;
+            ApplicationData.Current.LocalSettings.Values[ThemeSettingKey] = theme.ToString();
+        }
+
+        protected override void OnLaunched(LaunchActivatedEventArgs e)
+        {
+            var rootFrame = Window.Current.Content as Frame;
+            if (rootFrame == null)
+            {
+                rootFrame = new Frame();
+                rootFrame.NavigationFailed += OnNavigationFailed;
+                Window.Current.Content = rootFrame;
+            }
+
+            if (rootFrame.Content == null)
+            {
+                rootFrame.Navigate(typeof(MainPage), e.Arguments);
+            }
+
+            Window.Current.Activate();
+        }
+
+        private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
+        {
+            throw new System.Exception("Failed to load page " + e.SourcePageType.FullName);
+        }
+
+        private void OnSuspending(object sender, SuspendingEventArgs e)
+        {
+            e.SuspendingOperation.GetDeferral().Complete();
+        }
+
+        private static ApplicationTheme ReadSavedTheme()
+        {
+            object setting;
+            if (ApplicationData.Current.LocalSettings.Values.TryGetValue(ThemeSettingKey, out setting) &&
+                string.Equals(setting as string, ApplicationTheme.Dark.ToString(), System.StringComparison.OrdinalIgnoreCase))
+            {
+                return ApplicationTheme.Dark;
+            }
+
+            return ApplicationTheme.Light;
+        }
+    }
+}

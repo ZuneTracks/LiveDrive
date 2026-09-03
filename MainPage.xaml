@@ -1,0 +1,112 @@
+<Page
+    x:Class="LiveDrive.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:LiveDrive">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <SplitView x:Name="ShellSplitView" DisplayMode="CompactInline" CompactPaneLength="48" OpenPaneLength="196" IsPaneOpen="True">
+            <SplitView.Pane>
+                <Grid Background="{ThemeResource NavigationPaneBackgroundBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="64"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="LiveDrive" Foreground="{ThemeResource NavigationPaneForegroundBrush}" FontSize="24" FontWeight="SemiLight" VerticalAlignment="Center" Margin="16,0"/>
+                    <ListBox x:Name="NavigationList" Grid.Row="1" SelectionChanged="NavigationList_SelectionChanged"
+                             Background="Transparent" Foreground="{ThemeResource NavigationPaneForegroundBrush}" BorderThickness="0">
+                        <ListBoxItem Tag="Drive">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Folder" Margin="0,0,12,0"/>
+                                <TextBlock Text="Drive"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="Photos">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Pictures" Margin="0,0,12,0"/>
+                                <TextBlock Text="Photos"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="Albums">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Library" Margin="0,0,12,0"/>
+                                <TextBlock Text="Albums"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="Collections">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Calendar" Margin="0,0,12,0"/>
+                                <TextBlock Text="Collections"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="Search">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Find" Margin="0,0,12,0"/>
+                                <TextBlock Text="Search"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="Backup">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Camera" Margin="0,0,12,0"/>
+                                <TextBlock Text="Camera backup"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                    </ListBox>
+                    <Button Grid.Row="2" Tag="Settings" Click="NavigateButton_Click" Content="Account &amp; settings"
+                            HorizontalAlignment="Stretch" Margin="8"
+                            Background="{ThemeResource NavigationPaneButtonBackgroundBrush}"
+                            Foreground="{ThemeResource NavigationPaneForegroundBrush}"
+                            BorderBrush="{ThemeResource NavigationPaneButtonBackgroundBrush}" />
+                </Grid>
+            </SplitView.Pane>
+            <SplitView.Content>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="48"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Background="#0078D4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Image Source="ms-appx:///Assets/Square44x44Logo.png" Width="32" Height="32"
+                               Margin="8" Stretch="Uniform"/>
+                        <Button Grid.Column="2" Click="MenuButton_Click" Width="48" Height="48" Background="Transparent" BorderThickness="0"
+                                AutomationProperties.Name="Menu">
+                            <Grid Width="20" Height="16">
+                                <Border Height="2" Background="White" VerticalAlignment="Top"/>
+                                <Border Height="2" Background="White" VerticalAlignment="Center"/>
+                                <Border Height="2" Background="White" VerticalAlignment="Bottom"/>
+                            </Grid>
+                        </Button>
+                    </Grid>
+                    <Frame x:Name="ContentFrame" Grid.Row="1"/>
+                </Grid>
+            </SplitView.Content>
+        </SplitView>
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0"/>
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="ShellSplitView.DisplayMode" Value="Overlay"/>
+                        <Setter Target="ShellSplitView.IsPaneOpen" Value="False"/>
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="641"/>
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="ShellSplitView.DisplayMode" Value="CompactInline"/>
+                        <Setter Target="ShellSplitView.IsPaneOpen" Value="True"/>
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+    </Grid>
+</Page>

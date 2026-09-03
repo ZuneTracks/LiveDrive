@@ -1,0 +1,99 @@
+<Page
+    x:Class="LiveDrive.Pages.PhotosPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:helpers="using:LiveDrive.Helpers"
+    xmlns:models="using:LiveDrive.Models">
+    <Page.Resources>
+        <helpers:ThumbnailConverter x:Key="ThumbnailConverter"/>
+    </Page.Resources>
+    <Grid Padding="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="PageTitle" Text="Photos" Style="{StaticResource LiveDrivePageTitleStyle}"/>
+        <CommandBar Grid.Row="1" DefaultLabelPosition="Right">
+            <AppBarButton x:Name="SelectionButton" Icon="SelectAll" Label="Select" Click="SelectionButton_Click"/>
+            <AppBarButton Icon="Folder" Label="Folders" Click="SourceFoldersButton_Click"/>
+            <AppBarButton x:Name="ViewButton" Icon="View" Label="Medium">
+                <AppBarButton.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Small thumbnails" Tag="Small" Click="ThumbnailSize_Click"/>
+                        <MenuFlyoutItem Text="Medium thumbnails" Tag="Medium" Click="ThumbnailSize_Click"/>
+                        <MenuFlyoutItem Text="Large thumbnails" Tag="Large" Click="ThumbnailSize_Click"/>
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+            <AppBarButton x:Name="SortButton" Icon="Sort" Label="Date: newest">
+                <AppBarButton.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Date taken: newest first" Tag="DateTakenNewest" Click="PhotoSort_Click"/>
+                        <MenuFlyoutItem Text="Date taken: oldest first" Tag="DateTakenOldest" Click="PhotoSort_Click"/>
+                        <MenuFlyoutItem Text="Date modified: newest first" Tag="ModifiedNewest" Click="PhotoSort_Click"/>
+                        <MenuFlyoutItem Text="Name: A to Z" Tag="NameAscending" Click="PhotoSort_Click"/>
+                        <MenuFlyoutItem Text="Name: Z to A" Tag="NameDescending" Click="PhotoSort_Click"/>
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+            <AppBarButton x:Name="AddToAlbumButton" Icon="Add" Label="Add to album" IsEnabled="False" Click="AddToAlbumButton_Click"/>
+            <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
+        </CommandBar>
+        <Grid Grid.Row="2">
+            <GridView x:Name="PhotosGrid" ItemsSource="{x:Bind Photos}" IsItemClickEnabled="True"
+                      ItemClick="PhotosGrid_ItemClick" SelectionMode="None" SelectionChanged="PhotosGrid_SelectionChanged"
+                      ContainerContentChanging="PhotosGrid_ContainerContentChanging"
+                      ScrollViewer.HorizontalScrollMode="Disabled"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollMode="Enabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <GridView.ItemContainerStyle>
+                    <Style TargetType="GridViewItem">
+                       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                       <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                    </Style>
+                </GridView.ItemContainerStyle>
+                <GridView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                       <ItemsWrapGrid Orientation="Horizontal" ItemWidth="144" ItemHeight="174"/>
+                    </ItemsPanelTemplate>
+                </GridView.ItemsPanel>
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="models:DriveItem">
+                       <Grid Margin="4" Tag="{x:Bind}" Holding="PhotoTile_Holding">
+                            <Border Background="{ThemeResource PhotoTileBackgroundBrush}" CornerRadius="4">
+                                <Grid>
+                                    <SymbolIcon Symbol="Pictures" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
+                                    <Image Source="{Binding ThumbnailUrl, Converter={StaticResource ThumbnailConverter}}"
+                                           Stretch="UniformToFill"/>
+                                </Grid>
+                            </Border>
+                            <Border VerticalAlignment="Bottom" Background="#AA000000" Padding="6,4">
+                                <TextBlock Text="{x:Bind Name}" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+            <StackPanel x:Name="LoadingPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                <ProgressRing IsActive="True" Width="40" Height="40"/>
+                <TextBlock x:Name="LoadingText" Text="Loading your photos…" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+            </StackPanel>
+            <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBlock x:Name="EmptyTitle" Text="No photos found." FontSize="18" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="EmptyDescription" Text="Photos in your selected OneDrive folders will appear here." Opacity="0.65"
+                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,8"/>
+            </StackPanel>
+        </Grid>
+        <Border x:Name="SyncStatusPanel" Grid.Row="3" Background="{ThemeResource SurfaceBackgroundBrush}"
+                BorderBrush="{ThemeResource SurfaceBorderBrush}" BorderThickness="0,1,0,0"
+                Padding="8" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal">
+                <ProgressRing IsActive="True" Width="18" Height="18" Margin="0,0,8,0"/>
+                <TextBlock x:Name="SyncStatusText" VerticalAlignment="Center" Foreground="{ThemeResource MutedTextBrush}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,51 @@
+<Application
+    x:Class="LiveDrive.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#337AB7"/>
+            <Style x:Key="LiveDrivePageTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="28"/>
+                <Setter Property="FontWeight" Value="SemiLight"/>
+                <Setter Property="Margin" Value="0,0,0,4"/>
+            </Style>
+            <Style x:Key="LiveDrivePrimaryButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource AppAccentBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderBrush" Value="{StaticResource AppAccentBrush}"/>
+                <Setter Property="Padding" Value="14,8"/>
+            </Style>
+            <Style x:Key="LiveDriveSecondaryButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{ThemeResource SurfaceBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{ThemeResource ApplicationForegroundThemeBrush}"/>
+                <Setter Property="BorderBrush" Value="{ThemeResource SurfaceBorderBrush}"/>
+                <Setter Property="Padding" Value="14,8"/>
+            </Style>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="CalloutBackgroundBrush" Color="#EEF4F8"/>
+                    <SolidColorBrush x:Key="CalloutForegroundBrush" Color="#18232E"/>
+                    <SolidColorBrush x:Key="SurfaceBackgroundBrush" Color="#F7FAFC"/>
+                    <SolidColorBrush x:Key="SurfaceBorderBrush" Color="#D3E0E8"/>
+                    <SolidColorBrush x:Key="MutedTextBrush" Color="#516575"/>
+                    <SolidColorBrush x:Key="PhotoTileBackgroundBrush" Color="#DCE8EF"/>
+                    <SolidColorBrush x:Key="NavigationPaneBackgroundBrush" Color="#20252B"/>
+                    <SolidColorBrush x:Key="NavigationPaneForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="NavigationPaneButtonBackgroundBrush" Color="#285879"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="CalloutBackgroundBrush" Color="#2B3B4A"/>
+                    <SolidColorBrush x:Key="CalloutForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="SurfaceBackgroundBrush" Color="#202C36"/>
+                    <SolidColorBrush x:Key="SurfaceBorderBrush" Color="#3B5265"/>
+                    <SolidColorBrush x:Key="MutedTextBrush" Color="#B8C7D4"/>
+                    <SolidColorBrush x:Key="PhotoTileBackgroundBrush" Color="#2C4050"/>
+                    <SolidColorBrush x:Key="NavigationPaneBackgroundBrush" Color="#14191E"/>
+                    <SolidColorBrush x:Key="NavigationPaneForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="NavigationPaneButtonBackgroundBrush" Color="#3A6D91"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
