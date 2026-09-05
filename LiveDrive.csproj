@@ -74,6 +74,7 @@
   <ItemGroup>
     <Reference Include="Windows">
       <HintPath>$(TargetPlatformSdkPath)UnionMetadata\$(TargetPlatformVersion)\Windows.winmd</HintPath>
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -182,4 +183,10 @@
     <Content Include="Properties\Default.rd.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+  <Target Name="RemoveFrameworkWinmdsFromPackaging" AfterTargets="_AddUnionWinmd;_AddFxWinmd">
+    <ItemGroup>
+      <PackagingOutputs Remove="@(UnionMetadataWinmd)" />
+      <PackagingOutputs Remove="@(WinmdsFromFrameworkSDKs)" />
+    </ItemGroup>
+  </Target>
 </Project>
