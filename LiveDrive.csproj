@@ -183,7 +183,7 @@
     <Content Include="Properties\Default.rd.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-  <Target Name="RemoveFrameworkWinmdsFromPackaging" AfterTargets="_AddUnionWinmd;_AddFxWinmd">
+  <Target Name="RemoveFrameworkWinmdsFromPackaging" AfterTargets="_AddFxWinmd">
     <ItemGroup>
       <PackagingOutputs Remove="@(UnionMetadataWinmd)" />
       <PackagingOutputs Remove="@(WinmdsFromFrameworkSDKs)" />
