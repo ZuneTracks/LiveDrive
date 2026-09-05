@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Models;
 using Windows.Storage;
@@ -12,8 +13,8 @@ namespace LiveDrive.Services
         Task<DriveItem> GetOrCreateRootFolderAsync(string name);
         Task<DriveItem> GetRootFolderAsync();
         Task<DriveItemPage> GetPhotoDeltaPageAsync(string nextLink, string folderId);
-        Task<string> GetThumbnailUrlAsync(string itemId);
-        Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination);
+        Task<string> GetThumbnailUrlAsync(string itemId, CancellationToken cancellationToken);
+        Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination, CancellationToken cancellationToken);
         Task<string> ReadAppFolderFileAsync(string fileName);
         Task WriteAppFolderFileAsync(string fileName, string content);
         Task<IReadOnlyList<DriveItem>> SearchAsync(string query);

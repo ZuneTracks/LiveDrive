@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Models;
 using Windows.Data.Json;
@@ -85,11 +86,11 @@ namespace LiveDrive.Services
             };
         }
 
-        public async Task<string> GetThumbnailUrlAsync(string itemId)
+        public async Task<string> GetThumbnailUrlAsync(string itemId, CancellationToken cancellationToken)
         {
             using (var request = new HttpRequestMessage(HttpMethod.Get,
                 "/me/drive/items/" + Uri.EscapeDataString(itemId) + "/thumbnails/0/medium"))
-            using (var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, true))
+            using (var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, true, cancellationToken))
             {
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
@@ -101,9 +102,9 @@ namespace LiveDrive.Services
             }
         }
 
-        public async Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination)
+        public async Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination, CancellationToken cancellationToken)
         {
-            using (var response = await _http.GetAsync(thumbnailUrl, HttpCompletionOption.ResponseHeadersRead))
+            using (var response = await _http.GetAsync(thumbnailUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
             {
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
@@ -357,7 +358,8 @@ namespace LiveDrive.Services
         }
 
         private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead, bool allowNotFound = false)
+            HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead, bool allowNotFound = false,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             var token = await _auth.GetAccessTokenAsync();
             {
@@ -365,7 +367,7 @@ namespace LiveDrive.Services
                     ? request.RequestUri
                     : new Uri(GraphRoot + request.RequestUri.OriginalString);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
-                var response = await _http.SendAsync(request, completion);
+                var response = await _http.SendAsync(request, completion, cancellationToken);
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                 {
                     response.Dispose();
