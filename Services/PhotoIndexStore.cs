@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Models;
 using Windows.Data.Json;
@@ -109,7 +110,7 @@ namespace LiveDrive.Services
             await FileIO.WriteTextAsync(file, root.Stringify());
         }
 
-        public async Task CacheThumbnailAsync(DriveItem item, IGraphClient graph)
+        public async Task CacheThumbnailAsync(DriveItem item, IGraphClient graph, CancellationToken cancellationToken)
         {
             var existingUri = await GetLocalThumbnailUriAsync(item.Id);
             if (!string.IsNullOrEmpty(existingUri))
@@ -118,7 +119,7 @@ namespace LiveDrive.Services
                 return;
             }
 
-            var remoteUri = await graph.GetThumbnailUrlAsync(item.Id);
+            var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, cancellationToken);
             if (string.IsNullOrEmpty(remoteUri))
             {
                 return;
@@ -128,7 +129,7 @@ namespace LiveDrive.Services
             var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(GetThumbnailFileName(item.Id), CreationCollisionOption.ReplaceExisting);
             try
             {
-                if (await graph.DownloadThumbnailAsync(remoteUri, file))
+                if (await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
                 {
                     item.ThumbnailUrl = GetLocalThumbnailUri(item.Id);
                 }

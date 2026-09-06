@@ -45,6 +45,7 @@ namespace LiveDrive.Pages
         private readonly HashSet<string> _queuedThumbnailIds = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _unavailableThumbnailIds = new HashSet<string>(StringComparer.Ordinal);
         private readonly SemaphoreSlim _thumbnailCacheSlots = new SemaphoreSlim(2);
+        private CancellationTokenSource _thumbnailCacheCancellation = new CancellationTokenSource();
         public ObservableCollection<DriveItem> Photos { get; } = new ObservableCollection<DriveItem>();
 
         public PhotosPage()
@@ -188,6 +189,10 @@ namespace LiveDrive.Pages
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            if (_thumbnailCacheCancellation.IsCancellationRequested)
+            {
+                _thumbnailCacheCancellation = new CancellationTokenSource();
+            }
             _album = e.Parameter as PhotoAlbum;
             _collection = e.Parameter as PhotoCollection;
             PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title : "Photos";
@@ -196,6 +201,7 @@ namespace LiveDrive.Pages
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
+            _thumbnailCacheCancellation.Cancel();
             _shareManager.DataRequested -= ShareManager_DataRequested;
             base.OnNavigatedFrom(e);
         }
@@ -482,12 +488,13 @@ namespace LiveDrive.Pages
                 return;
             }
 
+            var cancellationToken = _thumbnailCacheCancellation.Token;
             try
             {
-                await _thumbnailCacheSlots.WaitAsync();
+                await _thumbnailCacheSlots.WaitAsync(cancellationToken);
                 try
                 {
-                    await _services.PhotoIndex.CacheThumbnailAsync(item, _services.Graph);
+                    await _services.PhotoIndex.CacheThumbnailAsync(item, _services.Graph, cancellationToken);
                     if (string.IsNullOrEmpty(item.ThumbnailUrl))
                     {
                         _unavailableThumbnailIds.Add(item.Id);
@@ -501,6 +508,9 @@ namespace LiveDrive.Pages
                 {
                     _thumbnailCacheSlots.Release();
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
             catch (Exception exception)
             {
