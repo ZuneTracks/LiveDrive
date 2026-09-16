@@ -7,14 +7,17 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <TextBlock Text="Albums" Style="{StaticResource LiveDrivePageTitleStyle}"/>
-        <CommandBar Grid.Row="1" DefaultLabelPosition="Right">
+        <TextBlock Grid.Row="1" Text="LiveDrive albums sync with LiveDrive on your other devices, but do not appear as OneDrive albums."
+                   TextWrapping="Wrap" Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,8"/>
+        <CommandBar Grid.Row="2" DefaultLabelPosition="Right">
             <AppBarButton Icon="Add" Label="New album" Click="NewAlbumButton_Click"/>
             <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
         </CommandBar>
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <ListView ItemsSource="{x:Bind Albums}" IsItemClickEnabled="True" ItemClick="AlbumsList_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:PhotoAlbum">

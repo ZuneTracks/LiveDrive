@@ -39,6 +39,7 @@
                 </AppBarButton.Flyout>
             </AppBarButton>
             <AppBarButton x:Name="AddToAlbumButton" Icon="Add" Label="Add to album" IsEnabled="False" Click="AddToAlbumButton_Click"/>
+            <AppBarButton x:Name="DeleteSelectedButton" Icon="Delete" Label="Delete" IsEnabled="False" Click="DeleteSelectedButton_Click"/>
             <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
         </CommandBar>
         <Grid Grid.Row="2">

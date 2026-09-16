@@ -29,6 +29,7 @@ namespace LiveDrive.Pages
         private const int PhotoBatchSize = 100;
         private bool _isLoading;
         private bool _isSelecting;
+        private bool _isDeletingPhotos;
         private bool _thumbnailErrorShown;
         private int _thumbnailCacheCount;
         private string _thumbnailSize;
@@ -704,10 +705,28 @@ namespace LiveDrive.Pages
 
         private async Task DeletePhotoAsync(DriveItem item)
         {
+            await DeletePhotosAsync(new[] { item });
+        }
+
+        private async Task DeletePhotosAsync(IReadOnlyList<DriveItem> selectedPhotos)
+        {
+            var photosToDelete = selectedPhotos
+                .Where(item => item != null && !string.IsNullOrEmpty(item.Id))
+                .GroupBy(item => item.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+            if (photosToDelete.Count == 0 || _isDeletingPhotos)
+            {
+                return;
+            }
+
+            var count = photosToDelete.Count;
             var dialog = new ContentDialog
             {
-                Title = "Delete photo?",
-                Content = "Delete " + item.Name + " from OneDrive? It can be restored from the OneDrive recycle bin.",
+                Title = count == 1 ? "Delete photo?" : "Delete photos?",
+                Content = count == 1
+                    ? "Delete " + photosToDelete[0].Name + " from OneDrive? It can be restored from the OneDrive recycle bin."
+                    : "Delete " + count + " photos from OneDrive? They can be restored from the OneDrive recycle bin.",
                 PrimaryButtonText = "Delete",
                 CloseButtonText = "Cancel"
             };
@@ -718,14 +737,28 @@ namespace LiveDrive.Pages
 
             try
             {
-                await _services.Graph.DeleteAsync(item);
-                Photos.Remove(item);
-                await _services.PhotoIndex.RemoveItemAsync(item.Id);
-                await PageFeedback.ShowInfoAsync("Deleted " + item.Name + ".");
+                _isDeletingPhotos = true;
+                DeleteSelectedButton.IsEnabled = false;
+                foreach (var photo in photosToDelete)
+                {
+                    await _services.Graph.DeleteAsync(photo);
+                    Photos.Remove(photo);
+                    _allPhotos.RemoveAll(item => item.Id == photo.Id);
+                    await _services.PhotoIndex.RemoveItemAsync(photo.Id);
+                }
+                ClearPhotoSelection();
+                await PageFeedback.ShowInfoAsync(count == 1
+                    ? "Deleted " + photosToDelete[0].Name + "."
+                    : "Deleted " + count + " photos.");
             }
             catch (Exception exception)
             {
                 await PageFeedback.ShowErrorAsync(exception);
+            }
+            finally
+            {
+                _isDeletingPhotos = false;
+                DeleteSelectedButton.IsEnabled = _isSelecting && PhotosGrid.SelectedItems.Count > 0;
             }
         }
 
@@ -754,17 +787,26 @@ namespace LiveDrive.Pages
             PhotosGrid.IsItemClickEnabled = false;
             SelectionButton.Label = "Done";
             AddToAlbumButton.IsEnabled = false;
+            DeleteSelectedButton.IsEnabled = false;
         }
 
         private void PhotosGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            AddToAlbumButton.IsEnabled = _isSelecting && PhotosGrid.SelectedItems.Count > 0;
+            var hasSelection = _isSelecting && PhotosGrid.SelectedItems.Count > 0;
+            AddToAlbumButton.IsEnabled = hasSelection;
+            DeleteSelectedButton.IsEnabled = hasSelection && !_isDeletingPhotos;
         }
 
         private async void AddToAlbumButton_Click(object sender, RoutedEventArgs e)
         {
             var selectedPhotos = PhotosGrid.SelectedItems.Cast<DriveItem>().ToList();
             await AddPhotosToAlbumAsync(selectedPhotos);
+        }
+
+        private async void DeleteSelectedButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedPhotos = PhotosGrid.SelectedItems.Cast<DriveItem>().ToList();
+            await DeletePhotosAsync(selectedPhotos);
         }
 
         private async Task AddPhotosToAlbumAsync(IReadOnlyList<DriveItem> selectedPhotos)
@@ -835,6 +877,7 @@ namespace LiveDrive.Pages
             PhotosGrid.SelectionMode = ListViewSelectionMode.None;
             SelectionButton.Label = "Select";
             AddToAlbumButton.IsEnabled = false;
+            DeleteSelectedButton.IsEnabled = false;
         }
 
         private void ClearPhotoSelection()
