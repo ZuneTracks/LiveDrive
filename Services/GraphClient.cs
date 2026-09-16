@@ -86,10 +86,11 @@ namespace LiveDrive.Services
             };
         }
 
-        public async Task<string> GetThumbnailUrlAsync(string itemId, CancellationToken cancellationToken)
+        public async Task<string> GetThumbnailUrlAsync(string itemId, string size, CancellationToken cancellationToken)
         {
+            var thumbnailSize = size == "large" ? "large" : "medium";
             using (var request = new HttpRequestMessage(HttpMethod.Get,
-                "/me/drive/items/" + Uri.EscapeDataString(itemId) + "/thumbnails/0/medium"))
+                "/me/drive/items/" + Uri.EscapeDataString(itemId) + "/thumbnails/0/" + thumbnailSize))
             using (var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, true, cancellationToken))
             {
                 if (response.StatusCode == HttpStatusCode.NotFound)

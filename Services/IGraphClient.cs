@@ -13,7 +13,7 @@ namespace LiveDrive.Services
         Task<DriveItem> GetOrCreateRootFolderAsync(string name);
         Task<DriveItem> GetRootFolderAsync();
         Task<DriveItemPage> GetPhotoDeltaPageAsync(string nextLink, string folderId);
-        Task<string> GetThumbnailUrlAsync(string itemId, CancellationToken cancellationToken);
+        Task<string> GetThumbnailUrlAsync(string itemId, string size, CancellationToken cancellationToken);
         Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination, CancellationToken cancellationToken);
         Task<string> ReadAppFolderFileAsync(string fileName);
         Task WriteAppFolderFileAsync(string fileName, string content);

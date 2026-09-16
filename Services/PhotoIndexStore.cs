@@ -21,6 +21,9 @@ namespace LiveDrive.Services
         private const int PreviewItemCount = 150;
         private const ulong ThumbnailCacheLimit = 64 * 1024 * 1024;
         private PhotoIndexSnapshot _inMemorySnapshot;
+        private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
+        private readonly Dictionary<string, DriveItem> _pendingEnsuredItems =
+            new Dictionary<string, DriveItem>(StringComparer.Ordinal);
 
         public async Task<PhotoIndexSnapshot> LoadAsync()
         {
@@ -82,6 +85,33 @@ namespace LiveDrive.Services
 
         public async Task SaveAsync(IEnumerable<DriveItem> items, IEnumerable<PhotoSourceFolder> sourceFolders)
         {
+            await _saveLock.WaitAsync();
+            try
+            {
+                var itemList = items.ToList();
+                foreach (var ensuredItem in _pendingEnsuredItems.Values)
+                {
+                    var existingIndex = itemList.FindIndex(item => item.Id == ensuredItem.Id);
+                    if (existingIndex < 0)
+                    {
+                        itemList.Add(ensuredItem);
+                    }
+                    else
+                    {
+                        itemList[existingIndex] = ensuredItem;
+                    }
+                }
+                await SaveCoreAsync(itemList, sourceFolders);
+                _pendingEnsuredItems.Clear();
+            }
+            finally
+            {
+                _saveLock.Release();
+            }
+        }
+
+        private async Task SaveCoreAsync(IEnumerable<DriveItem> items, IEnumerable<PhotoSourceFolder> sourceFolders)
+        {
             var itemList = items.ToList();
             var sourceFolderList = sourceFolders.ToList();
             var root = new JsonObject();
@@ -110,28 +140,60 @@ namespace LiveDrive.Services
             await FileIO.WriteTextAsync(file, root.Stringify());
         }
 
-        public async Task CacheThumbnailAsync(DriveItem item, IGraphClient graph, CancellationToken cancellationToken)
+        public async Task EnsureItemsAsync(IEnumerable<DriveItem> items)
         {
-            var existingUri = await GetLocalThumbnailUriAsync(item.Id);
+            await _saveLock.WaitAsync();
+            try
+            {
+                var snapshot = await LoadAsync();
+                var indexedItems = snapshot.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
+                var changed = false;
+                foreach (var item in items)
+                {
+                    if (item == null || string.IsNullOrEmpty(item.Id))
+                    {
+                        continue;
+                    }
+
+                    indexedItems[item.Id] = item;
+                    _pendingEnsuredItems[item.Id] = item;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    await SaveCoreAsync(indexedItems.Values, snapshot.SourceFolders);
+                }
+            }
+            finally
+            {
+                _saveLock.Release();
+            }
+        }
+
+        public async Task CacheThumbnailAsync(DriveItem item, IGraphClient graph, bool preferLarge, CancellationToken cancellationToken)
+        {
+            var existingUri = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
             if (!string.IsNullOrEmpty(existingUri))
             {
                 item.ThumbnailUrl = existingUri;
                 return;
             }
 
-            var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, cancellationToken);
+            var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, preferLarge ? "large" : "medium", cancellationToken);
             if (string.IsNullOrEmpty(remoteUri))
             {
                 return;
             }
 
             item.ThumbnailUrl = remoteUri;
-            var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(GetThumbnailFileName(item.Id), CreationCollisionOption.ReplaceExisting);
+            var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(
+                GetThumbnailFileName(item.Id, preferLarge), CreationCollisionOption.ReplaceExisting);
             try
             {
                 if (await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
                 {
-                    item.ThumbnailUrl = GetLocalThumbnailUri(item.Id);
+                    item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, preferLarge);
                 }
                 else
                 {
@@ -172,40 +234,61 @@ namespace LiveDrive.Services
         public async Task RemoveThumbnailAsync(string itemId)
         {
             var folder = await GetThumbnailsFolderAsync();
-            try
+            foreach (var preferLarge in new[] { false, true })
             {
-                await (await folder.GetFileAsync(GetThumbnailFileName(itemId))).DeleteAsync();
-            }
-            catch (FileNotFoundException)
-            {
+                try
+                {
+                    await (await folder.GetFileAsync(GetThumbnailFileName(itemId, preferLarge))).DeleteAsync();
+                }
+                catch (FileNotFoundException)
+                {
+                }
             }
         }
 
         public async Task RemoveItemAsync(string itemId)
         {
-            var snapshot = await LoadAsync();
-            await RemoveThumbnailAsync(itemId);
-            await SaveAsync(snapshot.Items.Where(item => item.Id != itemId), snapshot.SourceFolders);
+            await _saveLock.WaitAsync();
+            try
+            {
+                var snapshot = await LoadAsync();
+                _pendingEnsuredItems.Remove(itemId);
+                await RemoveThumbnailAsync(itemId);
+                await SaveCoreAsync(snapshot.Items.Where(item => item.Id != itemId), snapshot.SourceFolders);
+            }
+            finally
+            {
+                _saveLock.Release();
+            }
         }
 
         public async Task ClearAsync()
         {
-            _inMemorySnapshot = null;
+            await _saveLock.WaitAsync();
             try
             {
-                await (await ApplicationData.Current.LocalFolder.GetFolderAsync(CacheFolderName)).DeleteAsync();
+                _inMemorySnapshot = null;
+                _pendingEnsuredItems.Clear();
+                try
+                {
+                    await (await ApplicationData.Current.LocalFolder.GetFolderAsync(CacheFolderName)).DeleteAsync();
+                }
+                catch (FileNotFoundException)
+                {
+                }
             }
-            catch (FileNotFoundException)
+            finally
             {
+                _saveLock.Release();
             }
         }
 
-        private async Task<string> GetLocalThumbnailUriAsync(string itemId)
+        private async Task<string> GetLocalThumbnailUriAsync(string itemId, bool preferLarge)
         {
             try
             {
-                await (await GetThumbnailsFolderAsync()).GetFileAsync(GetThumbnailFileName(itemId));
-                return GetLocalThumbnailUri(itemId);
+                await (await GetThumbnailsFolderAsync()).GetFileAsync(GetThumbnailFileName(itemId, preferLarge));
+                return GetLocalThumbnailUri(itemId, preferLarge);
             }
             catch (FileNotFoundException)
             {
@@ -213,9 +296,10 @@ namespace LiveDrive.Services
             }
         }
 
-        private static string GetLocalThumbnailUri(string itemId)
+        private static string GetLocalThumbnailUri(string itemId, bool preferLarge)
         {
-            return "ms-appdata:///local/" + CacheFolderName + "/" + ThumbnailsFolderName + "/" + GetThumbnailFileName(itemId);
+            return "ms-appdata:///local/" + CacheFolderName + "/" + ThumbnailsFolderName + "/" +
+                GetThumbnailFileName(itemId, preferLarge);
         }
 
         private static List<DriveItem> ReadItems(JsonArray values)
@@ -254,12 +338,12 @@ namespace LiveDrive.Services
             return values;
         }
 
-        private static string GetThumbnailFileName(string itemId)
+        private static string GetThumbnailFileName(string itemId, bool preferLarge)
         {
             using (var sha256 = SHA256.Create())
             {
                 var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(itemId));
-                return BitConverter.ToString(hash).Replace("-", string.Empty) + ".jpg";
+                return BitConverter.ToString(hash).Replace("-", string.Empty) + (preferLarge ? ".large.jpg" : ".jpg");
             }
         }
 

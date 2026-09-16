@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveDrive Privacy Policy</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+    body { margin: 0; }
+    main, header, footer { box-sizing: border-box; max-width: 48rem; margin: auto; padding: 1.5rem; }
+    header { border-bottom: 1px solid #777; }
+    footer { border-top: 1px solid #777; }
+    a { color: #146eb4; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html">LiveDrive</a>
+    <nav aria-label="Primary navigation">
+      <a href="privacy.html" aria-current="page">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+    </nav>
+  </header>
+  <main>
+    <h1>LiveDrive Privacy Policy</h1>
+    <p><strong>Last updated: September 3, 2026</strong></p>
+    <p>LiveDrive is an independent UWP client for accessing a user's Microsoft OneDrive account on Windows 10 Mobile. It is not affiliated with, endorsed by, or operated by Microsoft.</p>
+    <h2>Information LiveDrive accesses</h2>
+    <p>After the user signs in, LiveDrive requests the Microsoft Graph permissions needed to provide its features:</p>
+    <ul>
+      <li>Basic signed-in account access through <code>User.Read</code>.</li>
+      <li>Access to OneDrive files and folders through <code>Files.ReadWrite.All</code>.</li>
+      <li>Access to LiveDrive's private OneDrive app folder through <code>Files.ReadWrite.AppFolder</code> for LiveDrive-defined photo albums.</li>
+    </ul>
+    <p>LiveDrive uses these permissions only to perform actions initiated by the user, such as browsing, uploading, downloading, copying, moving, deleting, sharing, and organizing files.</p>
+    <h2>Storage and retention</h2>
+    <p>LiveDrive stores the following data in its private app storage:</p>
+    <ul>
+      <li>Microsoft sign-in tokens in Windows PasswordVault.</li>
+      <li>The selected Photos source folders, cached photo metadata, and cached thumbnails to improve performance.</li>
+      <li>Names of recently completed manual camera uploads.</li>
+    </ul>
+    <p>LiveDrive-defined album data is stored in its private OneDrive app folder.</p>
+    <p>Signing out removes the stored sign-in token, local photo index, and recent upload history. Files uploaded to, copied within, or deleted from OneDrive remain subject to the user's OneDrive account, including its recycle-bin and retention behavior.</p>
+    <h2>Information sent to third parties</h2>
+    <p>LiveDrive communicates directly with Microsoft identity services for sign-in and Microsoft Graph for OneDrive operations. It does not operate its own server, collect analytics, sell personal information, or send OneDrive file contents to an independent LiveDrive service.</p>
+    <p>When the user creates a share link, Microsoft Graph and OneDrive determine its availability and scope according to the account and tenant policy. The user is responsible for sharing that link only with intended recipients.</p>
+    <h2>Security</h2>
+    <p>LiveDrive uses the Windows account and application-storage facilities available on the supported platform and transmits OneDrive requests over HTTPS. No client secret is embedded because LiveDrive is registered as a public client. As with any cloud-storage client, users should protect their device and Microsoft account credentials.</p>
+    <h2>Changes and contact</h2>
+    <p>This policy may be updated as LiveDrive changes. The current version is published in this repository. Questions or concerns can be submitted through the <a href="https://github.com/ZuneTracks/LiveDrive/issues">LiveDrive issue tracker</a>.</p>
+  </main>
+  <footer><p>LiveDrive</p></footer>
+</body>
+</html>
