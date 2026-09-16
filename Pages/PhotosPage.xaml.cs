@@ -36,14 +36,15 @@ namespace LiveDrive.Pages
         private List<DriveItem> _allPhotos = new List<DriveItem>();
         private int _displayedPhotoCount;
         private bool _isAppendingPhotoBatch;
+        private bool _hasFullPhotoIndex;
         private ScrollViewer _photoScrollViewer;
         private PhotoAlbum _album;
         private PhotoCollection _collection;
         private readonly DataTransferManager _shareManager;
         private StorageFile _shareFile;
         private string _shareTitle;
-        private readonly HashSet<string> _queuedThumbnailIds = new HashSet<string>(StringComparer.Ordinal);
-        private readonly HashSet<string> _unavailableThumbnailIds = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _queuedThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _unavailableThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
         private readonly SemaphoreSlim _thumbnailCacheSlots = new SemaphoreSlim(2);
         private CancellationTokenSource _thumbnailCacheCancellation = new CancellationTokenSource();
         public ObservableCollection<DriveItem> Photos { get; } = new ObservableCollection<DriveItem>();
@@ -130,6 +131,7 @@ namespace LiveDrive.Pages
 
             ApplicationData.Current.LocalSettings.Values[ThumbnailSizeSettingName] = normalizedSize;
             ViewButton.Label = normalizedSize;
+            QueueVisibleThumbnailCaching();
         }
 
         private void ApplyPhotoSort(string sort)
@@ -196,6 +198,7 @@ namespace LiveDrive.Pages
             _album = e.Parameter as PhotoAlbum;
             _collection = e.Parameter as PhotoCollection;
             PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title : "Photos";
+            SetEmptyMessage();
             base.OnNavigatedTo(e);
         }
 
@@ -233,6 +236,7 @@ namespace LiveDrive.Pages
                 }
 
                 var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
+                _hasFullPhotoIndex = true;
                 if (snapshot.SourceFolders.Count == 0)
                 {
                     var sources = await PromptForSourceFoldersAsync();
@@ -255,6 +259,7 @@ namespace LiveDrive.Pages
                 {
                     RenderPhotos(FilterPhotos(snapshot.Items));
                     SetSyncStatus("Showing cached photos.");
+                    SetEmptyMessage();
                     EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                     return;
                 }
@@ -295,7 +300,8 @@ namespace LiveDrive.Pages
                                     await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
                                 }
                                 indexedPhotos[item.Id] = item;
-                                _unavailableThumbnailIds.Remove(item.Id);
+                                _unavailableThumbnailKeys.Remove(item.Id + "|medium");
+                                _unavailableThumbnailKeys.Remove(item.Id + "|large");
                             }
                             else
                             {
@@ -481,9 +487,39 @@ namespace LiveDrive.Pages
                 return;
             }
 
-            var item = args.Item as DriveItem;
-            if (item == null || !string.IsNullOrEmpty(item.ThumbnailUrl) ||
-                _unavailableThumbnailIds.Contains(item.Id) || !_queuedThumbnailIds.Add(item.Id))
+            await CacheVisibleThumbnailAsync(args.Item as DriveItem);
+        }
+
+        private void QueueVisibleThumbnailCaching()
+        {
+            if (!_hasFullPhotoIndex || _thumbnailSize != "Large")
+            {
+                return;
+            }
+
+            for (var index = 0; index < PhotosGrid.Items.Count; index++)
+            {
+                var container = PhotosGrid.ContainerFromIndex(index) as FrameworkElement;
+                var item = container == null ? null : container.DataContext as DriveItem;
+                if (item != null)
+                {
+                    _ = CacheVisibleThumbnailAsync(item);
+                }
+            }
+        }
+
+        private async Task CacheVisibleThumbnailAsync(DriveItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            var preferLarge = _hasFullPhotoIndex && _thumbnailSize == "Large";
+            var cacheKey = item.Id + (preferLarge ? "|large" : "|medium");
+            if ((!preferLarge && !string.IsNullOrEmpty(item.ThumbnailUrl)) ||
+                (preferLarge && IsLargeThumbnail(item.ThumbnailUrl)) ||
+                _unavailableThumbnailKeys.Contains(cacheKey) || !_queuedThumbnailKeys.Add(cacheKey))
             {
                 return;
             }
@@ -494,10 +530,10 @@ namespace LiveDrive.Pages
                 await _thumbnailCacheSlots.WaitAsync(cancellationToken);
                 try
                 {
-                    await _services.PhotoIndex.CacheThumbnailAsync(item, _services.Graph, cancellationToken);
+                    await _services.PhotoIndex.CacheThumbnailAsync(item, _services.Graph, preferLarge, cancellationToken);
                     if (string.IsNullOrEmpty(item.ThumbnailUrl))
                     {
-                        _unavailableThumbnailIds.Add(item.Id);
+                        _unavailableThumbnailKeys.Add(cacheKey);
                     }
                     if (Interlocked.Increment(ref _thumbnailCacheCount) % 12 == 0)
                     {
@@ -522,8 +558,14 @@ namespace LiveDrive.Pages
             }
             finally
             {
-                _queuedThumbnailIds.Remove(item.Id);
+                _queuedThumbnailKeys.Remove(cacheKey);
             }
+        }
+
+        private static bool IsLargeThumbnail(string thumbnailUrl)
+        {
+            return !string.IsNullOrEmpty(thumbnailUrl) &&
+                   thumbnailUrl.IndexOf(".large.jpg", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void PhotoTile_Holding(object sender, HoldingRoutedEventArgs e)
@@ -545,7 +587,7 @@ namespace LiveDrive.Pages
             var view = new MenuFlyoutItem { Text = "View" };
             view.Click += async (menuSender, menuArgs) => await ViewPhotoAsync(item);
             var addToAlbum = new MenuFlyoutItem { Text = "Add to album" };
-            addToAlbum.Click += async (menuSender, menuArgs) => await AddPhotosToAlbumAsync(new[] { item.Id });
+            addToAlbum.Click += async (menuSender, menuArgs) => await AddPhotosToAlbumAsync(new[] { item });
             var saveAs = new MenuFlyoutItem { Text = "Save as" };
             saveAs.Click += async (menuSender, menuArgs) => await SavePhotoAsAsync(item);
             var share = new MenuFlyoutItem { Text = "Share" };
@@ -701,11 +743,16 @@ namespace LiveDrive.Pages
 
         private void SelectionButton_Click(object sender, RoutedEventArgs e)
         {
-            _isSelecting = !_isSelecting;
-            PhotosGrid.SelectionMode = _isSelecting ? ListViewSelectionMode.Multiple : ListViewSelectionMode.None;
-            PhotosGrid.IsItemClickEnabled = !_isSelecting;
-            PhotosGrid.SelectedItems.Clear();
-            SelectionButton.Label = _isSelecting ? "Done" : "Select";
+            if (_isSelecting)
+            {
+                ExitSelectionMode();
+                return;
+            }
+
+            _isSelecting = true;
+            PhotosGrid.SelectionMode = ListViewSelectionMode.Multiple;
+            PhotosGrid.IsItemClickEnabled = false;
+            SelectionButton.Label = "Done";
             AddToAlbumButton.IsEnabled = false;
         }
 
@@ -716,13 +763,18 @@ namespace LiveDrive.Pages
 
         private async void AddToAlbumButton_Click(object sender, RoutedEventArgs e)
         {
-            var selectedIds = PhotosGrid.SelectedItems.Cast<DriveItem>().Select(item => item.Id).ToList();
-            await AddPhotosToAlbumAsync(selectedIds);
+            var selectedPhotos = PhotosGrid.SelectedItems.Cast<DriveItem>().ToList();
+            await AddPhotosToAlbumAsync(selectedPhotos);
         }
 
-        private async Task AddPhotosToAlbumAsync(IReadOnlyList<string> selectedIds)
+        private async Task AddPhotosToAlbumAsync(IReadOnlyList<DriveItem> selectedPhotos)
         {
-            if (selectedIds.Count == 0)
+            var photosToAdd = selectedPhotos
+                .Where(item => item != null && !string.IsNullOrEmpty(item.Id))
+                .GroupBy(item => item.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+            if (photosToAdd.Count == 0)
             {
                 return;
             }
@@ -747,21 +799,49 @@ namespace LiveDrive.Pages
                     Title = "Add to album",
                     Content = picker,
                     PrimaryButtonText = "Add",
-                    CloseButtonText = "Cancel"
+                    CloseButtonText = "Cancel",
+                    IsPrimaryButtonEnabled = false
                 };
-                if (await dialog.ShowAsync() != ContentDialogResult.Primary || picker.SelectedItem == null)
+                picker.SelectionChanged += (sender, args) =>
+                    dialog.IsPrimaryButtonEnabled = picker.SelectedItem is PhotoAlbum;
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary)
                 {
                     return;
                 }
 
-                var album = (PhotoAlbum)picker.SelectedItem;
-                await _services.Albums.AddPhotosAsync(album.Id, selectedIds);
-                await PageFeedback.ShowInfoAsync("Added " + selectedIds.Count + " photos to " + album.Name + ".");
-                PhotosGrid.SelectedItems.Clear();
+                var album = picker.SelectedItem as PhotoAlbum;
+                if (album == null)
+                {
+                    await PageFeedback.ShowInfoAsync("Select an album before adding photos.");
+                    return;
+                }
+
+                await _services.PhotoIndex.EnsureItemsAsync(photosToAdd);
+                await _services.Albums.AddPhotosAsync(album.Id, photosToAdd.Select(item => item.Id));
+                await PageFeedback.ShowInfoAsync("Added " + photosToAdd.Count + " photos to " + album.Name + ".");
+                ClearPhotoSelection();
             }
             catch (Exception exception)
             {
                 await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private void ExitSelectionMode()
+        {
+            ClearPhotoSelection();
+            _isSelecting = false;
+            PhotosGrid.IsItemClickEnabled = true;
+            PhotosGrid.SelectionMode = ListViewSelectionMode.None;
+            SelectionButton.Label = "Select";
+            AddToAlbumButton.IsEnabled = false;
+        }
+
+        private void ClearPhotoSelection()
+        {
+            if (PhotosGrid.SelectionMode != ListViewSelectionMode.None && PhotosGrid.SelectedItems.Count > 0)
+            {
+                PhotosGrid.SelectedItems.Clear();
             }
         }
 
@@ -836,6 +916,19 @@ namespace LiveDrive.Pages
             }
 
             return items.Where(item => GetMonthKey(item) == _collection.MonthKey);
+        }
+
+        private void SetEmptyMessage()
+        {
+            if (_album != null)
+            {
+                EmptyTitle.Text = "This album is empty.";
+                EmptyDescription.Text = "Add photos from Photos to see them here.";
+                return;
+            }
+
+            EmptyTitle.Text = "No photos found.";
+            EmptyDescription.Text = "Photos in your selected OneDrive folders will appear here.";
         }
 
         private static string GetMonthKey(DriveItem item)

@@ -5,8 +5,10 @@ LiveDrive is an independent, phone-friendly UWP prototype for browsing a persona
 ## Public documents
 
 - [App description and feature set](APP_DESCRIPTION.md)
-- [Privacy Policy](PRIVACY.md)
-- [Terms of Service](TERMS.md)
+- [Privacy Policy](https://zunetracks.github.io/LiveDrive/privacy.html)
+- [Terms of Service](https://zunetracks.github.io/LiveDrive/terms.html)
+
+The GitHub Pages site source is in `docs/`.
 
 ## Set up Microsoft sign-in
 
@@ -38,7 +40,7 @@ Open `LiveDrive.csproj` in Visual Studio with the Windows 10 SDK (10.0.15063.0 o
 ## Release process
 
 1. Start from a clean, committed source tree. Set `Package.appxmanifest`'s package version to match the intended release tag, commit the change, and create an annotated tag from that exact commit.
-2. From that clean tag, produce signed ARM and x64 Store/upload package artifacts. Do not reuse packages from another commit or architecture.
+2. From that clean tag, produce signed ARM and x64 Store/upload package artifacts. Both Release artifacts must retain .NET Native. Do not reuse packages from another commit or architecture.
 3. Inspect each outer package, its inner architecture package, and their package maps before publishing. SDK `Windows.winmd` and SDK `*Contract.winmd` files must be absent; app-owned runtime-component WinMDs must remain.
 4. Attach the signed packages to the GitHub release along with certificate and dependency installation directions appropriate to the signing setup.
 5. Publish the GitHub release from the same verified tag. Do not move the tag or alter historic releases after publication.
