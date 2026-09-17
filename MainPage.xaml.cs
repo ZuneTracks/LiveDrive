@@ -1,3 +1,4 @@
+using System;
 using LiveDrive.Pages;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -10,6 +11,45 @@ namespace LiveDrive
         {
             InitializeComponent();
             NavigationList.SelectedIndex = 0;
+            Loaded += async (sender, args) => await LoadStorageUsageAsync();
+        }
+
+        private async System.Threading.Tasks.Task LoadStorageUsageAsync()
+        {
+            try
+            {
+                var token = await ((App)Application.Current).Services.Auth.GetStoredTokenAsync();
+                if (token == null)
+                {
+                    StorageUsageText.Text = "OneDrive storage: sign in to view.";
+                    StorageUsageBar.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                var quota = await ((App)Application.Current).Services.Graph.GetQuotaAsync();
+                StorageUsageText.Text = "OneDrive storage: " + FormatStorage(quota.Used) + " of " +
+                    FormatStorage(quota.Total) + " used";
+                if (quota.Total > 0)
+                {
+                    StorageUsageBar.Value = Math.Min(1, Math.Max(0, (double)quota.Used / quota.Total));
+                    StorageUsageBar.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    StorageUsageBar.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                StorageUsageText.Text = "OneDrive storage: unavailable.";
+                StorageUsageBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private static string FormatStorage(long bytes)
+        {
+            const long gigabyte = 1024L * 1024 * 1024;
+            return string.Format("{0:0.#} GB", (double)bytes / gigabyte);
         }
 
         private void NavigationList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -44,6 +84,10 @@ namespace LiveDrive
             else if (destination == "Photos")
             {
                 ContentFrame.Navigate(typeof(PhotosPage));
+            }
+            else if (destination == "Videos")
+            {
+                ContentFrame.Navigate(typeof(PhotosPage), "Videos");
             }
             else if (destination == "Albums")
             {

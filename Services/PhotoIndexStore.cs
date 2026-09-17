@@ -22,6 +22,7 @@ namespace LiveDrive.Services
         private const ulong ThumbnailCacheLimit = 64 * 1024 * 1024;
         private PhotoIndexSnapshot _inMemorySnapshot;
         private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _thumbnailFileLock = new SemaphoreSlim(1, 1);
         private readonly Dictionary<string, DriveItem> _pendingEnsuredItems =
             new Dictionary<string, DriveItem>(StringComparer.Ordinal);
 
@@ -173,76 +174,109 @@ namespace LiveDrive.Services
 
         public async Task CacheThumbnailAsync(DriveItem item, IGraphClient graph, bool preferLarge, CancellationToken cancellationToken)
         {
-            var existingUri = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
-            if (!string.IsNullOrEmpty(existingUri))
-            {
-                item.ThumbnailUrl = existingUri;
-                return;
-            }
-
-            var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, preferLarge ? "large" : "medium", cancellationToken);
-            if (string.IsNullOrEmpty(remoteUri))
-            {
-                return;
-            }
-
-            item.ThumbnailUrl = remoteUri;
-            var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(
-                GetThumbnailFileName(item.Id, preferLarge), CreationCollisionOption.ReplaceExisting);
+            await _thumbnailFileLock.WaitAsync(cancellationToken);
             try
             {
-                if (await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
+                var existingUri = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
+                if (!string.IsNullOrEmpty(existingUri))
                 {
-                    item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, preferLarge);
+                    item.ThumbnailUrl = existingUri;
+                    return;
                 }
-                else
+
+                var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, preferLarge ? "large" : "medium", cancellationToken);
+                if (string.IsNullOrEmpty(remoteUri))
+                {
+                    return;
+                }
+
+                item.ThumbnailUrl = remoteUri;
+                var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(
+                    GetThumbnailFileName(item.Id, preferLarge), CreationCollisionOption.ReplaceExisting);
+                try
+                {
+                    if (await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
+                    {
+                        item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, preferLarge);
+                    }
+                    else
+                    {
+                        await file.DeleteAsync();
+                        item.ThumbnailUrl = string.Empty;
+                    }
+                }
+                catch
                 {
                     await file.DeleteAsync();
-                    item.ThumbnailUrl = string.Empty;
+                    throw;
                 }
             }
-            catch
+            finally
             {
-                await file.DeleteAsync();
-                throw;
+                _thumbnailFileLock.Release();
             }
         }
 
         public async Task TrimThumbnailsAsync()
         {
-            var files = await (await GetThumbnailsFolderAsync()).GetFilesAsync();
-            var sizedFiles = new List<Tuple<StorageFile, ulong, DateTimeOffset>>();
-            ulong totalSize = 0;
-            foreach (var file in files)
+            await _thumbnailFileLock.WaitAsync();
+            try
             {
-                var properties = await file.GetBasicPropertiesAsync();
-                sizedFiles.Add(Tuple.Create(file, properties.Size, file.DateCreated));
-                totalSize += properties.Size;
-            }
-
-            foreach (var file in sizedFiles.OrderBy(entry => entry.Item3))
-            {
-                if (totalSize <= ThumbnailCacheLimit)
+                var files = await (await GetThumbnailsFolderAsync()).GetFilesAsync();
+                var sizedFiles = new List<Tuple<StorageFile, ulong, DateTimeOffset>>();
+                ulong totalSize = 0;
+                foreach (var file in files)
                 {
-                    break;
+                    var properties = await file.GetBasicPropertiesAsync();
+                    sizedFiles.Add(Tuple.Create(file, properties.Size, file.DateCreated));
+                    totalSize += properties.Size;
                 }
-                await file.Item1.DeleteAsync();
-                totalSize -= file.Item2;
+
+                foreach (var file in sizedFiles.OrderBy(entry => entry.Item3))
+                {
+                    if (totalSize <= ThumbnailCacheLimit)
+                    {
+                        break;
+                    }
+                    try
+                    {
+                        await file.Item1.DeleteAsync();
+                        totalSize -= file.Item2;
+                    }
+                    catch (IOException)
+                    {
+                    }
+                }
+            }
+            finally
+            {
+                _thumbnailFileLock.Release();
             }
         }
 
         public async Task RemoveThumbnailAsync(string itemId)
         {
-            var folder = await GetThumbnailsFolderAsync();
-            foreach (var preferLarge in new[] { false, true })
+            await _thumbnailFileLock.WaitAsync();
+            try
             {
-                try
+                var folder = await GetThumbnailsFolderAsync();
+                foreach (var preferLarge in new[] { false, true })
                 {
-                    await (await folder.GetFileAsync(GetThumbnailFileName(itemId, preferLarge))).DeleteAsync();
+                    try
+                    {
+                        await (await folder.GetFileAsync(GetThumbnailFileName(itemId, preferLarge))).DeleteAsync();
+                    }
+                    catch (FileNotFoundException)
+                    {
+                    }
+                    catch (IOException)
+                    {
+                    }
                 }
-                catch (FileNotFoundException)
-                {
-                }
+            }
+            finally
+            {
+                _thumbnailFileLock.Release();
             }
         }
 
@@ -269,12 +303,20 @@ namespace LiveDrive.Services
             {
                 _inMemorySnapshot = null;
                 _pendingEnsuredItems.Clear();
+                await _thumbnailFileLock.WaitAsync();
                 try
                 {
-                    await (await ApplicationData.Current.LocalFolder.GetFolderAsync(CacheFolderName)).DeleteAsync();
+                    try
+                    {
+                        await (await ApplicationData.Current.LocalFolder.GetFolderAsync(CacheFolderName)).DeleteAsync();
+                    }
+                    catch (FileNotFoundException)
+                    {
+                    }
                 }
-                catch (FileNotFoundException)
+                finally
                 {
+                    _thumbnailFileLock.Release();
                 }
             }
             finally
@@ -313,7 +355,9 @@ namespace LiveDrive.Services
                     Id = entry.GetNamedString("id"),
                     Name = entry.GetNamedString("name", "Unnamed item"),
                     Size = (long)entry.GetNamedNumber("size", 0),
+                    Created = entry.GetNamedString("created", string.Empty),
                     LastModified = entry.GetNamedString("lastModified", string.Empty),
+                    OneDriveLocation = entry.GetNamedString("oneDriveLocation", string.Empty),
                     MimeType = entry.GetNamedString("mimeType", string.Empty),
                     DateTaken = entry.GetNamedString("dateTaken", string.Empty)
                 });
@@ -330,7 +374,9 @@ namespace LiveDrive.Services
                 entry.SetNamedValue("id", JsonValue.CreateStringValue(item.Id));
                 entry.SetNamedValue("name", JsonValue.CreateStringValue(item.Name));
                 entry.SetNamedValue("size", JsonValue.CreateNumberValue(item.Size));
+                entry.SetNamedValue("created", JsonValue.CreateStringValue(item.Created ?? string.Empty));
                 entry.SetNamedValue("lastModified", JsonValue.CreateStringValue(item.LastModified ?? string.Empty));
+                entry.SetNamedValue("oneDriveLocation", JsonValue.CreateStringValue(item.OneDriveLocation ?? string.Empty));
                 entry.SetNamedValue("mimeType", JsonValue.CreateStringValue(item.MimeType ?? string.Empty));
                 entry.SetNamedValue("dateTaken", JsonValue.CreateStringValue(item.DateTaken ?? string.Empty));
                 values.Add(entry);

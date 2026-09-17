@@ -1,7 +1,12 @@
+using System;
+using System.Threading;
 using LiveDrive.Services;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
+using Windows.ApplicationModel.Background;
+using Windows.Data.Xml.Dom;
 using Windows.Storage;
+using Windows.UI.Notifications;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
@@ -46,6 +51,58 @@ namespace LiveDrive
             }
 
             Window.Current.Activate();
+        }
+
+        protected override void OnBackgroundActivated(BackgroundActivatedEventArgs args)
+        {
+            base.OnBackgroundActivated(args);
+            var deferral = args.TaskInstance.GetDeferral();
+            var cancellation = new CancellationTokenSource();
+            args.TaskInstance.Canceled += (sender, reason) => cancellation.Cancel();
+            RunCameraBackupAsync(cancellation, deferral);
+        }
+
+        private async void RunCameraBackupAsync(CancellationTokenSource cancellation, BackgroundTaskDeferral deferral)
+        {
+            try
+            {
+                var uploadedCount = await Services.CameraBackup.UploadNewCameraRollItemsAsync(cancellation.Token);
+                if (uploadedCount > 0)
+                {
+                    try
+                    {
+                        await Services.LiveTile.UpdateAsync();
+                    }
+                    catch (Exception exception)
+                    {
+                        Services.CameraBackupState.SaveLastResult("Camera Roll upload completed, but Live Tile update failed: " +
+                            exception.Message);
+                    }
+                    ShowCameraBackupToast(uploadedCount);
+                }
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                Services.CameraBackupState.SaveLastResult("Scheduled Camera Roll backup was canceled.");
+            }
+            catch (Exception exception)
+            {
+                Services.CameraBackupState.SaveLastResult("Scheduled Camera Roll backup failed: " + exception.Message);
+            }
+            finally
+            {
+                cancellation.Dispose();
+                deferral.Complete();
+            }
+        }
+
+        private static void ShowCameraBackupToast(int uploadedCount)
+        {
+            var toastXml = new XmlDocument();
+            toastXml.LoadXml("<toast><visual><binding template=\"ToastGeneric\"><text>LiveDrive</text><text>Uploaded " +
+                uploadedCount + " new Camera Roll " + (uploadedCount == 1 ? "item." : "items.") +
+                "</text></binding></visual></toast>");
+            ToastNotificationManager.CreateToastNotifier().Show(new ToastNotification(toastXml));
         }
 
         private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)

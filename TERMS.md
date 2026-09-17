@@ -19,7 +19,7 @@ These Terms govern use of LiveDrive, an independent Windows 10 Mobile OneDrive c
 
 ## Manual camera upload
 
-The Camera Backup feature is currently a **manual, foreground upload queue**. It does not provide continuous or guaranteed background backup, and uploads require LiveDrive to remain active. You are responsible for selecting media and confirming that uploads have completed.
+Camera Backup includes a **manual, foreground upload queue** and an optional scheduled Camera Roll scan. Scheduled checks are best effort and do not provide continuous or guaranteed background backup; Windows can delay, throttle, or cancel them. You are responsible for selecting media and confirming that uploads have completed.
 
 ## Availability and limitations
 

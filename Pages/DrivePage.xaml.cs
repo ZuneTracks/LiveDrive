@@ -11,6 +11,7 @@ using Windows.Storage.Pickers;
 using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Input;
 
 namespace LiveDrive.Pages
 {
@@ -96,6 +97,11 @@ namespace LiveDrive.Pages
                 return;
             }
 
+            await ViewItemAsync(item);
+        }
+
+        private async Task ViewItemAsync(DriveItem item)
+        {
             if (item.IsFolder)
             {
                 _history.Push(_currentFolderId);
@@ -107,12 +113,41 @@ namespace LiveDrive.Pages
             await DownloadAndOpenAsync(item);
         }
 
+        private void DriveItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var row = sender as FrameworkElement;
+            var item = row?.DataContext as DriveItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            var menu = new MenuFlyout();
+            var view = new MenuFlyoutItem { Text = "View" };
+            view.Click += async (menuSender, menuArgs) => await ViewItemAsync(item);
+            var fileInfo = new MenuFlyoutItem { Text = "File info" };
+            fileInfo.Click += async (menuSender, menuArgs) => await FileInfoDialog.ShowAsync(item);
+            menu.Items.Add(view);
+            menu.Items.Add(fileInfo);
+            menu.ShowAt(row);
+        }
+
         private async void SaveAsButton_Click(object sender, RoutedEventArgs e)
         {
             var item = GetSelectedItems().SingleOrDefault();
             if (item != null)
             {
                 await SaveAsAsync(item);
+            }
+        }
+
+        private async void FileInfoButton_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetSelectedItems().SingleOrDefault();
+            if (item != null)
+            {
+                await FileInfoDialog.ShowAsync(item);
             }
         }
 
@@ -408,6 +443,7 @@ namespace LiveDrive.Pages
             SelectAllButton.IsEnabled = _items.Count > 0;
             SelectAllButton.Label = _items.Count > 0 && selectedItems.Count == _items.Count ? "Clear selection" : "Select all";
             ViewButton.IsEnabled = selectedItems.Count == 1;
+            FileInfoButton.IsEnabled = selectedItems.Count == 1;
             SaveAsButton.IsEnabled = isSingleFile;
             ShareButton.IsEnabled = isSingleFile;
             CopyButton.IsEnabled = selectedItems.Count > 0;

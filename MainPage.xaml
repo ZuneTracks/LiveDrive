@@ -27,6 +27,12 @@
                                 <TextBlock Text="Photos"/>
                             </StackPanel>
                         </ListBoxItem>
+                        <ListBoxItem Tag="Videos">
+                            <StackPanel Orientation="Horizontal" Padding="8">
+                                <SymbolIcon Symbol="Video" Margin="0,0,12,0"/>
+                                <TextBlock Text="Videos"/>
+                            </StackPanel>
+                        </ListBoxItem>
                         <ListBoxItem Tag="Albums">
                             <StackPanel Orientation="Horizontal" Padding="8">
                                 <SymbolIcon Symbol="Library" Margin="0,0,12,0"/>
@@ -52,11 +58,17 @@
                             </StackPanel>
                         </ListBoxItem>
                     </ListBox>
-                    <Button Grid.Row="2" Tag="Settings" Click="NavigateButton_Click" Content="Account &amp; settings"
-                            HorizontalAlignment="Stretch" Margin="8"
-                            Background="{ThemeResource NavigationPaneButtonBackgroundBrush}"
-                            Foreground="{ThemeResource NavigationPaneForegroundBrush}"
-                            BorderBrush="{ThemeResource NavigationPaneButtonBackgroundBrush}" />
+                    <StackPanel Grid.Row="2" Margin="8">
+                        <TextBlock x:Name="StorageUsageText" Text="OneDrive storage: loading…" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource NavigationPaneForegroundBrush}" Opacity="0.85" Margin="8,0,8,6"/>
+                        <ProgressBar x:Name="StorageUsageBar" Minimum="0" Maximum="1" Value="0" Height="6"
+                                     Visibility="Collapsed" Margin="8,0,8,8"/>
+                        <Button Tag="Settings" Click="NavigateButton_Click" Content="Account &amp; Settings"
+                                HorizontalAlignment="Stretch"
+                                Background="{ThemeResource NavigationPaneButtonBackgroundBrush}"
+                                Foreground="{ThemeResource NavigationPaneForegroundBrush}"
+                                BorderBrush="{ThemeResource NavigationPaneButtonBackgroundBrush}" />
+                    </StackPanel>
                 </Grid>
             </SplitView.Pane>
             <SplitView.Content>

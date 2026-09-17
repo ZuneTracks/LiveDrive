@@ -7,7 +7,15 @@ namespace LiveDrive.Models
         public string Id { get; set; }
         public string Name { get; set; }
         public List<string> ItemIds { get; set; } = new List<string>();
+        public int? DisplayItemCount { get; set; }
 
-        public string ItemCountLabel => ItemIds.Count == 1 ? "1 photo" : ItemIds.Count + " photos";
+        public string ItemCountLabel
+        {
+            get
+            {
+                var count = DisplayItemCount ?? ItemIds.Count;
+                return count == 1 ? "1 photo" : count + " photos";
+            }
+        }
     }
 }

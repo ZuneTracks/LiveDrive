@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using LiveDrive.Helpers;
 using LiveDrive.Models;
@@ -57,9 +59,16 @@ namespace LiveDrive.Pages
             try
             {
                 var albums = await _services.Albums.GetAlbumsAsync();
+                var availablePhotoIds = new HashSet<string>(
+                    (await _services.PhotoIndex.LoadAsync()).Items.Select(item => item.Id),
+                    StringComparer.Ordinal);
                 Albums.Clear();
                 foreach (var album in albums)
                 {
+                    album.DisplayItemCount = album.ItemIds
+                        .Where(itemId => !string.IsNullOrEmpty(itemId))
+                        .Distinct(StringComparer.Ordinal)
+                        .Count(availablePhotoIds.Contains);
                     Albums.Add(album);
                 }
                 EmptyPanel.Visibility = Albums.Count == 0 ? Visibility.Visible : Visibility.Collapsed;

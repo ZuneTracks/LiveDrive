@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Helpers;
 using LiveDrive.Models;
@@ -18,6 +19,8 @@ namespace LiveDrive.Pages
         private readonly AppServices _services;
         private readonly List<StorageFile> _files = new List<StorageFile>();
         private bool _isUploading;
+        private bool _isCheckingCameraRoll;
+        private bool _isInitializingScheduledBackup;
         public ObservableCollection<BackupItem> Queue { get; } = new ObservableCollection<BackupItem>();
         public ObservableCollection<BackupItem> RecentlyUploaded { get; } = new ObservableCollection<BackupItem>();
 
@@ -25,7 +28,92 @@ namespace LiveDrive.Pages
         {
             InitializeComponent();
             _services = ((App)Application.Current).Services;
-            Loaded += async (sender, args) => await LoadRecentlyUploadedAsync();
+            Loaded += async (sender, args) =>
+            {
+                _isInitializingScheduledBackup = true;
+                ScheduledBackupToggle.IsOn = _services.CameraBackupScheduler.IsEnabled;
+                _isInitializingScheduledBackup = false;
+                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                await LoadRecentlyUploadedAsync();
+            };
+        }
+
+        private async void ScheduledBackupToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializingScheduledBackup)
+            {
+                return;
+            }
+
+            try
+            {
+                if (ScheduledBackupToggle.IsOn)
+                {
+                    await _services.CameraBackupScheduler.EnableAsync();
+                }
+                else
+                {
+                    _services.CameraBackupScheduler.Disable();
+                }
+                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+            }
+            catch (Exception exception)
+            {
+                _isInitializingScheduledBackup = true;
+                ScheduledBackupToggle.IsOn = false;
+                _isInitializingScheduledBackup = false;
+                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private string GetScheduledBackupStatus()
+        {
+            var lastResult = _services.CameraBackupState.GetLastResult();
+            if (!_services.CameraBackupScheduler.IsEnabled)
+            {
+                return string.IsNullOrEmpty(lastResult)
+                    ? "Scheduled Camera Roll backup is off."
+                    : "Scheduled Camera Roll backup is off. Last check: " + lastResult;
+            }
+
+            return string.IsNullOrEmpty(lastResult)
+                ? "Scheduled Camera Roll backup is on. Windows runs it when resources allow."
+                : "Scheduled Camera Roll backup is on. " + lastResult;
+        }
+
+        private async void CheckCameraRollButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isCheckingCameraRoll)
+            {
+                return;
+            }
+
+            try
+            {
+                _isCheckingCameraRoll = true;
+                CheckCameraRollButton.IsEnabled = false;
+                ScheduledBackupStatus.Text = "Checking Camera Roll…";
+                var progress = new Progress<string>(status => ScheduledBackupStatus.Text = status);
+                var uploadedCount = await _services.CameraBackup.UploadNewCameraRollItemsAsync(
+                    CancellationToken.None, progress);
+                await LoadRecentlyUploadedAsync();
+                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                await PageFeedback.ShowInfoAsync(uploadedCount == 0
+                    ? _services.CameraBackupState.GetLastResult()
+                    : "Uploaded " + uploadedCount + " new Camera Roll " +
+                      (uploadedCount == 1 ? "item." : "items."));
+            }
+            catch (Exception exception)
+            {
+                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+            finally
+            {
+                _isCheckingCameraRoll = false;
+                CheckCameraRollButton.IsEnabled = true;
+            }
         }
 
         private async void ChooseMediaButton_Click(object sender, RoutedEventArgs e)

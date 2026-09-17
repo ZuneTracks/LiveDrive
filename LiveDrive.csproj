@@ -128,6 +128,7 @@
     </Compile>
     <Compile Include="Helpers\BooleanToSymbolConverter.cs" />
     <Compile Include="Helpers\DelegateProgress.cs" />
+    <Compile Include="Helpers\FileInfoDialog.cs" />
     <Compile Include="Helpers\OneDriveFolderPicker.cs" />
     <Compile Include="Helpers\PageFeedback.cs" />
     <Compile Include="Helpers\ThumbnailConverter.cs" />
@@ -135,6 +136,7 @@
     <Compile Include="Models\BackupItem.cs" />
     <Compile Include="Models\DriveItem.cs" />
     <Compile Include="Models\DriveItemPage.cs" />
+    <Compile Include="Models\OneDriveQuota.cs" />
     <Compile Include="Models\PhotoAlbum.cs" />
     <Compile Include="Models\PhotoCollection.cs" />
     <Compile Include="Models\PhotoIndexSnapshot.cs" />
@@ -162,6 +164,9 @@
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\AppServices.cs" />
+    <Compile Include="Services\CameraBackupScheduler.cs" />
+    <Compile Include="Services\CameraBackupService.cs" />
+    <Compile Include="Services\CameraBackupStateStore.cs" />
     <Compile Include="Services\ClientConfiguration.cs" />
     <Compile Include="Services\CameraUploadHistoryStore.cs" />
     <Compile Include="Services\DriveClipboard.cs" />
@@ -172,6 +177,7 @@
     <Compile Include="Services\PasswordVaultTokenStore.cs" />
     <Compile Include="Services\PhotoAlbumService.cs" />
     <Compile Include="Services\PhotoIndexStore.cs" />
+    <Compile Include="Services\LiveTileService.cs" />
   </ItemGroup>
   <ItemGroup>
     <Page Include="Pages\CameraBackupPage.xaml">

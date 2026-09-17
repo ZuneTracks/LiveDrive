@@ -1,14 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          IgnorableNamespaces="uap mp">
-  <Identity Name="LiveDrive" Publisher="CN=LiveDrive" Version="1.0.2.0" />
-  <mp:PhoneIdentity PhoneProductId="7B5C89D9-6D95-40D7-976C-C75A2A56BBF9"
+  <Identity Name="ZuneTracks.LiveDriveUWP" Publisher="CN=3ED86B18-5F5F-4AE0-AA9C-697B841F55A7" Version="1.5.9.0" />
+  <mp:PhoneIdentity PhoneProductId="fbd83fa5-4f82-4ff8-abd3-fc6abb31ed10"
                     PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>LiveDrive</DisplayName>
-    <PublisherDisplayName>LiveDrive</PublisherDisplayName>
+    <DisplayName>LiveDrive UWP</DisplayName>
+    <PublisherDisplayName>ZuneTracks</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Resources>
@@ -19,7 +19,7 @@
   </Dependencies>
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="LiveDrive.App">
-      <uap:VisualElements DisplayName="LiveDrive" Description="A personal cloud drive client"
+      <uap:VisualElements DisplayName="LiveDrive UWP" Description="A personal cloud drive client using Microsoft Graph API for OneDrive access."
                           BackgroundColor="#0078D4" Square150x150Logo="Assets\Square150x150Logo.png"
                           Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
@@ -31,5 +31,6 @@
     <Capability Name="internetClient" />
     <uap:Capability Name="picturesLibrary" />
     <uap:Capability Name="videosLibrary" />
+    <uap:Capability Name="removableStorage" />
   </Capabilities>
 </Package>

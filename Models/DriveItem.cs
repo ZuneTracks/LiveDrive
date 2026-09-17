@@ -8,7 +8,9 @@ namespace LiveDrive.Models
         public string Name { get; set; }
         public bool IsFolder { get; set; }
         public long Size { get; set; }
+        public string Created { get; set; }
         public string LastModified { get; set; }
+        public string OneDriveLocation { get; set; }
         public string DownloadUrl { get; set; }
         private string _thumbnailUrl;
 

@@ -12,6 +12,8 @@ namespace LiveDrive.Services
         Task<IReadOnlyList<DriveItem>> GetChildrenAsync(string folderId);
         Task<DriveItem> GetOrCreateRootFolderAsync(string name);
         Task<DriveItem> GetRootFolderAsync();
+        Task<OneDriveQuota> GetQuotaAsync();
+        Task<IReadOnlyList<DriveItem>> GetRecentAsync();
         Task<DriveItemPage> GetPhotoDeltaPageAsync(string nextLink, string folderId);
         Task<string> GetThumbnailUrlAsync(string itemId, string size, CancellationToken cancellationToken);
         Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination, CancellationToken cancellationToken);

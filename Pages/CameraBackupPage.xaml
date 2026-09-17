@@ -9,12 +9,19 @@
             <Border Background="{ThemeResource CalloutBackgroundBrush}" Padding="12" Margin="0,0,0,16">
                 <StackPanel>
                     <TextBlock Text="Manual uploads on Windows 10 Mobile" Foreground="{ThemeResource CalloutForegroundBrush}" FontWeight="SemiBold"/>
-                    <TextBlock Text="Legacy Mobile does not provide reliable long-running background transfer for an independent app. LiveDrive keeps this queue visible while the app is open; choose photos or videos manually to back up them now."
+                    <TextBlock Text="Scheduled backup is best effort: Windows may delay or stop it. Enable it below to check the Camera Roll every 15 minutes; keep using manual uploads when a backup must finish now."
                                Foreground="{ThemeResource CalloutForegroundBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     <TextBlock Text="Uploads are stored in the LiveDrive Camera Roll folder at the root of your OneDrive. Same-named files are saved as new copies rather than replacing existing files."
                                Foreground="{ThemeResource CalloutForegroundBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                 </StackPanel>
             </Border>
+            <ToggleSwitch x:Name="ScheduledBackupToggle" Header="Check Camera Roll every 15 minutes"
+                          Toggled="ScheduledBackupToggle_Toggled" Margin="0,0,0,4"/>
+            <TextBlock x:Name="ScheduledBackupStatus" TextWrapping="Wrap"
+                       Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,6"/>
+            <Button x:Name="CheckCameraRollButton" Content="Check Camera Roll now"
+                    Click="CheckCameraRollButton_Click" HorizontalAlignment="Left"
+                    Margin="0,0,0,12" Style="{StaticResource LiveDriveSecondaryButtonStyle}"/>
             <Grid Margin="0,0,0,12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
