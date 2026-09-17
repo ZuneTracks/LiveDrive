@@ -14,7 +14,11 @@ using Windows.Storage;
 
 namespace LiveDrive.Services
 {
+#if BACKGROUND_TASK
+    internal sealed class GraphClient : IGraphClient
+#else
     public sealed class GraphClient : IGraphClient
+#endif
     {
         private const string GraphRoot = "https://graph.microsoft.com/v1.0";
         private readonly OAuthService _auth;
@@ -200,22 +204,23 @@ namespace LiveDrive.Services
             return ReadItems(await GetJsonAsync(path));
         }
 
-        public async Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null, bool renameOnConflict = false)
+        public async Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null,
+            bool renameOnConflict = false, bool failOnConflict = false)
         {
             progress?.Report(0);
             var properties = await file.GetBasicPropertiesAsync();
             if (properties.Size > 4 * 1024 * 1024)
             {
-                await UploadLargeFileAsync(parentId, file, properties.Size, progress, renameOnConflict);
+                await UploadLargeFileAsync(parentId, file, properties.Size, progress, renameOnConflict, failOnConflict);
                 return;
             }
 
             var target = string.IsNullOrEmpty(parentId)
                 ? "/me/drive/root:/" + Uri.EscapeDataString(file.Name) + ":/content"
                 : "/me/drive/items/" + Uri.EscapeDataString(parentId) + ":/" + Uri.EscapeDataString(file.Name) + ":/content";
-            if (renameOnConflict)
+            if (renameOnConflict || failOnConflict)
             {
-                target += "?@microsoft.graph.conflictBehavior=rename";
+                target += "?@microsoft.graph.conflictBehavior=" + (renameOnConflict ? "rename" : "fail");
             }
             using (var request = new HttpRequestMessage(HttpMethod.Put, GraphRoot + target)
             {
@@ -272,7 +277,7 @@ namespace LiveDrive.Services
         }
 
         private async Task UploadLargeFileAsync(string parentId, StorageFile file, ulong size, IProgress<double> progress,
-            bool renameOnConflict)
+            bool renameOnConflict, bool failOnConflict)
         {
             var target = string.IsNullOrEmpty(parentId)
                 ? "/me/drive/root:/" + Uri.EscapeDataString(file.Name) + ":/createUploadSession"
@@ -280,7 +285,8 @@ namespace LiveDrive.Services
             var sessionRequest = new HttpRequestMessage(HttpMethod.Post, target)
             {
                 Content = new StringContent(
-                    "{\"item\":{\"@microsoft.graph.conflictBehavior\":\"" + (renameOnConflict ? "rename" : "replace") + "\"}}",
+                    "{\"item\":{\"@microsoft.graph.conflictBehavior\":\"" +
+                    (renameOnConflict ? "rename" : failOnConflict ? "fail" : "replace") + "\"}}",
                     Encoding.UTF8,
                     "application/json")
             };

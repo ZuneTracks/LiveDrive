@@ -30,6 +30,9 @@ namespace LiveDrive.Pages
                 SelectLiveTileMode(_services.LiveTile.Mode);
                 await UpdateStorageStatusAsync(token != null);
                 UpdateLiveTileControls();
+                NotificationDiagnosticStatus.Text = string.IsNullOrEmpty(_services.CameraBackupState.GetToastDiagnostic())
+                    ? "No notification diagnostic has run yet."
+                    : _services.CameraBackupState.GetToastDiagnostic();
             };
         }
 
@@ -196,6 +199,19 @@ namespace LiveDrive.Pages
                 ((App)Application.Current).SaveThemePreference(ThemeToggle.IsOn);
                 ThemeStatus.Text = "Theme saved. Close and reopen LiveDrive to apply it.";
                 await PageFeedback.ShowInfoAsync("Theme saved. Close and reopen LiveDrive to apply it.");
+            }
+        }
+
+        private void NotificationDiagnosticButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                NotificationDiagnosticStatus.Text = ((App)Application.Current).SendCameraBackupToastDiagnostic();
+            }
+            catch (Exception exception)
+            {
+                NotificationDiagnosticStatus.Text = _services.CameraBackupState.GetToastDiagnostic();
+                _ = PageFeedback.ShowErrorAsync(exception);
             }
         }
 

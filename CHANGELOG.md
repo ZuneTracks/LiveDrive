@@ -25,6 +25,11 @@ All notable user-facing changes are documented here.
   best-effort 15-minute scheduled scan for supported photos and videos.
 - Added scanning of accessible SD-card **Camera Roll** folders for Camera Roll backup.
 - Added scan and upload stage updates to manual Camera Roll checks.
+- Added the last-started date and time for manual and scheduled Camera Roll scans.
+- Moved scheduled Camera Roll backup to a separate background process, isolating it
+  from the foreground LiveDrive app.
+- Added an in-app notification diagnostic that submits a test toast and records the
+  device notification setting plus the toast submission result or error.
 - Added a styled **About LiveDrive** button in Account & Settings.
 - Added cache-backed large thumbnails for the media grid.
 
@@ -50,3 +55,5 @@ All notable user-facing changes are documented here.
   manual check from traversing an entire removable drive.
 - Fixed Camera Roll backup history exceeding the Windows Phone application-settings
   size limit after repeated scans.
+- Fixed Camera Roll uploads creating renamed copies of files already present in the
+  LiveDrive Camera Roll folder.

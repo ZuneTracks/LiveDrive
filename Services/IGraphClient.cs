@@ -7,7 +7,11 @@ using Windows.Storage;
 
 namespace LiveDrive.Services
 {
+#if BACKGROUND_TASK
+    internal interface IGraphClient
+#else
     public interface IGraphClient
+#endif
     {
         Task<IReadOnlyList<DriveItem>> GetChildrenAsync(string folderId);
         Task<DriveItem> GetOrCreateRootFolderAsync(string name);
@@ -20,7 +24,8 @@ namespace LiveDrive.Services
         Task<string> ReadAppFolderFileAsync(string fileName);
         Task WriteAppFolderFileAsync(string fileName, string content);
         Task<IReadOnlyList<DriveItem>> SearchAsync(string query);
-        Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null, bool renameOnConflict = false);
+        Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null,
+            bool renameOnConflict = false, bool failOnConflict = false);
         Task CopyAsync(DriveItem item, string destinationFolderId);
         Task MoveAsync(DriveItem item, string destinationFolderId);
         Task DeleteAsync(DriveItem item);

@@ -1,9 +1,7 @@
 using System;
-using System.Threading;
 using LiveDrive.Services;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
-using Windows.ApplicationModel.Background;
 using Windows.Data.Xml.Dom;
 using Windows.Storage;
 using Windows.UI.Notifications;
@@ -53,58 +51,38 @@ namespace LiveDrive
             Window.Current.Activate();
         }
 
-        protected override void OnBackgroundActivated(BackgroundActivatedEventArgs args)
+        public string SendCameraBackupToastDiagnostic()
         {
-            base.OnBackgroundActivated(args);
-            var deferral = args.TaskInstance.GetDeferral();
-            var cancellation = new CancellationTokenSource();
-            args.TaskInstance.Canceled += (sender, reason) => cancellation.Cancel();
-            RunCameraBackupAsync(cancellation, deferral);
+            return ShowCameraBackupToast(1, true);
         }
 
-        private async void RunCameraBackupAsync(CancellationTokenSource cancellation, BackgroundTaskDeferral deferral)
+        private string ShowCameraBackupToast(int uploadedCount, bool isDiagnostic)
         {
+            var notifier = ToastNotificationManager.CreateToastNotifier();
+            var notifierSetting = notifier.Setting.ToString();
             try
             {
-                var uploadedCount = await Services.CameraBackup.UploadNewCameraRollItemsAsync(cancellation.Token);
-                if (uploadedCount > 0)
-                {
-                    try
-                    {
-                        await Services.LiveTile.UpdateAsync();
-                    }
-                    catch (Exception exception)
-                    {
-                        Services.CameraBackupState.SaveLastResult("Camera Roll upload completed, but Live Tile update failed: " +
-                            exception.Message);
-                    }
-                    ShowCameraBackupToast(uploadedCount);
-                }
-            }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-            {
-                Services.CameraBackupState.SaveLastResult("Scheduled Camera Roll backup was canceled.");
+                var toastXml = new XmlDocument();
+                var message = isDiagnostic
+                    ? "Notification diagnostic test."
+                    : "Uploaded " + uploadedCount + " new Camera Roll " +
+                      (uploadedCount == 1 ? "item." : "items.");
+                toastXml.LoadXml("<toast><visual><binding template=\"ToastGeneric\"><text>LiveDrive</text><text>" +
+                    message + "</text></binding></visual></toast>");
+                notifier.Show(new ToastNotification(toastXml));
+                var result = "Toast submitted at " + DateTimeOffset.Now.ToString("g") +
+                    ". Device setting: " + notifierSetting + ".";
+                Services.CameraBackupState.SaveToastDiagnostic(result);
+                return result;
             }
             catch (Exception exception)
             {
-                Services.CameraBackupState.SaveLastResult("Scheduled Camera Roll backup failed: " + exception.Message);
-            }
-            finally
-            {
-                cancellation.Dispose();
-                deferral.Complete();
+                var result = "Toast failed at " + DateTimeOffset.Now.ToString("g") +
+                    ". Device setting: " + notifierSetting + ". " + exception.Message;
+                Services.CameraBackupState.SaveToastDiagnostic(result);
+                throw;
             }
         }
-
-        private static void ShowCameraBackupToast(int uploadedCount)
-        {
-            var toastXml = new XmlDocument();
-            toastXml.LoadXml("<toast><visual><binding template=\"ToastGeneric\"><text>LiveDrive</text><text>Uploaded " +
-                uploadedCount + " new Camera Roll " + (uploadedCount == 1 ? "item." : "items.") +
-                "</text></binding></visual></toast>");
-            ToastNotificationManager.CreateToastNotifier().Show(new ToastNotification(toastXml));
-        }
-
         private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
         {
             throw new System.Exception("Failed to load page " + e.SourcePageType.FullName);

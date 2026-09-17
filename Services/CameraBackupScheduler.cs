@@ -8,6 +8,7 @@ namespace LiveDrive.Services
     public sealed class CameraBackupScheduler
     {
         public const string TaskName = "LiveDriveCameraBackup";
+        public const string TaskEntryPoint = "LiveDrive.BackgroundTasks.CameraBackupBackgroundTask";
         private const uint IntervalMinutes = 15;
 
         public bool IsEnabled => BackgroundTaskRegistration.AllTasks.Values.Any(task => task.Name == TaskName);
@@ -22,7 +23,11 @@ namespace LiveDrive.Services
             }
 
             Disable();
-            var builder = new BackgroundTaskBuilder { Name = TaskName };
+            var builder = new BackgroundTaskBuilder
+            {
+                Name = TaskName,
+                TaskEntryPoint = TaskEntryPoint
+            };
             builder.SetTrigger(new TimeTrigger(IntervalMinutes, false));
             builder.Register();
         }

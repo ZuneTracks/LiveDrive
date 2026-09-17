@@ -102,10 +102,10 @@
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="5.2.9" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Windows">
-      <HintPath>$(TargetPlatformSdkPath)UnionMetadata\$(TargetPlatformVersion)\Windows.winmd</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <ProjectReference Include="LiveDrive.BackgroundTasks\LiveDrive.BackgroundTasks.csproj">
+      <Project>{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}</Project>
+      <Name>LiveDrive.BackgroundTasks</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">

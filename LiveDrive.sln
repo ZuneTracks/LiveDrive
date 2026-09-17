@@ -4,6 +4,8 @@ VisualStudioVersion = 17.14.37614.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiveDrive", "LiveDrive.csproj", "{7B5C89D9-6D95-40D7-976C-C75A2A56BBF9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiveDrive.BackgroundTasks", "LiveDrive.BackgroundTasks\LiveDrive.BackgroundTasks.csproj", "{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM = Debug|ARM
@@ -32,6 +34,18 @@ Global
 		{7B5C89D9-6D95-40D7-976C-C75A2A56BBF9}.Store|x64.ActiveCfg = Store|x64
 		{7B5C89D9-6D95-40D7-976C-C75A2A56BBF9}.Store|x64.Build.0 = Store|x64
 		{7B5C89D9-6D95-40D7-976C-C75A2A56BBF9}.Store|x64.Deploy.0 = Store|x64
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Debug|ARM.ActiveCfg = Debug|ARM
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Debug|ARM.Build.0 = Debug|ARM
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Debug|x64.ActiveCfg = Debug|x64
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Debug|x64.Build.0 = Debug|x64
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Release|ARM.ActiveCfg = Release|ARM
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Release|ARM.Build.0 = Release|ARM
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Release|x64.ActiveCfg = Release|x64
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Release|x64.Build.0 = Release|x64
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Store|ARM.ActiveCfg = Store|ARM
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Store|ARM.Build.0 = Store|ARM
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Store|x64.ActiveCfg = Store|x64
+		{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}.Store|x64.Build.0 = Store|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
