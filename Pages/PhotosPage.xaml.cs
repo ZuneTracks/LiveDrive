@@ -581,7 +581,7 @@ namespace LiveDrive.Pages
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
             }
-            catch (Exception exception)
+            catch (Exception)
             {
                 if (!_thumbnailErrorShown)
                 {
