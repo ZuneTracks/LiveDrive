@@ -83,7 +83,6 @@ namespace LiveDrive
                 throw;
             }
         }
-
         private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
         {
             throw new System.Exception("Failed to load page " + e.SourcePageType.FullName);

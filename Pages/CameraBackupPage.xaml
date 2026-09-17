@@ -11,7 +11,7 @@
                     <TextBlock Text="Manual uploads on Windows 10 Mobile" Foreground="{ThemeResource CalloutForegroundBrush}" FontWeight="SemiBold"/>
                     <TextBlock Text="Scheduled backup is best effort: Windows may delay or stop it. Enable it below to check the Camera Roll every 15 minutes; keep using manual uploads when a backup must finish now."
                                Foreground="{ThemeResource CalloutForegroundBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
-                    <TextBlock Text="Uploads are stored in the LiveDrive Camera Roll folder at the root of your OneDrive. Same-named files are saved as new copies rather than replacing existing files."
+                    <TextBlock Text="Uploads are stored in the LiveDrive Camera Roll folder at the root of your OneDrive. Files with names already present there are skipped."
                                Foreground="{ThemeResource CalloutForegroundBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                 </StackPanel>
             </Border>
