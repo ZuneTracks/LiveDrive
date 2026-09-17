@@ -11,14 +11,28 @@
                 <Button Content="Sign in with Microsoft" Click="SignInButton_Click" Style="{StaticResource LiveDrivePrimaryButtonStyle}"/>
                 <Button Content="Sign out" Click="SignOutButton_Click" Margin="8,0,0,0" Style="{StaticResource LiveDriveSecondaryButtonStyle}"/>
             </StackPanel>
+            <TextBlock x:Name="StorageStatus" TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}" Margin="0,0,0,12"/>
+            <TextBlock Text="Live Tile" Style="{StaticResource LiveDriveSectionTitleStyle}"/>
+            <ComboBox x:Name="LiveTileMode" SelectionChanged="LiveTileMode_SelectionChanged" Margin="0,0,0,8">
+                <ComboBoxItem Tag="Off">Off</ComboBoxItem>
+                <ComboBoxItem Tag="StorageUsage">OneDrive storage usage</ComboBoxItem>
+                <ComboBoxItem Tag="RecentFile">Most recent OneDrive file</ComboBoxItem>
+                <ComboBoxItem Tag="SelectedPhoto">Selected photo</ComboBoxItem>
+                <ComboBoxItem Tag="SelectedAlbum">Selected LiveDrive album</ComboBoxItem>
+            </ComboBox>
+            <Button x:Name="ChooseTileItemButton" Content="Choose tile item" Click="ChooseTileItemButton_Click"
+                    HorizontalAlignment="Left" Style="{StaticResource LiveDriveSecondaryButtonStyle}" Margin="0,0,0,4"/>
+            <Button x:Name="RefreshLiveTileButton" Content="Refresh Live Tile" Click="RefreshLiveTileButton_Click"
+                    HorizontalAlignment="Left" Style="{StaticResource LiveDriveQuietButtonStyle}" Margin="0,0,0,4"/>
+            <TextBlock x:Name="LiveTileStatus" TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}" Margin="0,0,0,12"/>
             <TextBlock Text="Appearance" Style="{StaticResource LiveDriveSectionTitleStyle}"/>
             <ToggleSwitch x:Name="ThemeToggle" Header="Dark mode" Toggled="ThemeToggle_Toggled" Margin="0,0,0,8"/>
             <TextBlock x:Name="ThemeStatus" TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}" Margin="0,0,0,4"/>
             <TextBlock Text="Privacy" Style="{StaticResource LiveDriveSectionTitleStyle}"/>
             <TextBlock Text="Tokens are stored in the device PasswordVault. LiveDrive calls Microsoft Graph directly and does not contain a client secret."
                        TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}"/>
-            <Button x:Name="AboutButton" Content="ABOUT" Click="AboutButton_Click" HorizontalAlignment="Left"
-                    Margin="0,20,0,0" Style="{StaticResource LiveDriveQuietButtonStyle}"/>
+            <Button x:Name="AboutButton" Content="About LiveDrive" Click="AboutButton_Click" HorizontalAlignment="Left"
+                    Margin="0,12,0,0" Style="{StaticResource LiveDriveSecondaryButtonStyle}"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

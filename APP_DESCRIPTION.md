@@ -55,18 +55,19 @@ LiveDrive is not affiliated with Microsoft and does not attempt to replicate Mic
 
 ## Camera upload
 
-- Provides a **manual** queue for photos and videos selected by the user.
+- Provides a **manual** queue for photos and videos selected by the user, plus an immediate **Check Camera Roll now** scan.
 - Uploads selected media to a root-level `LiveDrive Camera Roll` folder in OneDrive.
-- Requires LiveDrive to stay in the foreground while uploading.
+- Supports manual foreground uploads and an opt-in, best-effort 15-minute Camera Roll scan for newly detected supported media. Windows may delay, throttle, or cancel scheduled runs.
 - Lets the user remove queued files before uploading.
 - Skips selecting the same device file twice and preserves same-named OneDrive files by creating a new numbered copy.
 - Removes completed items from the active queue and keeps their names in a persisted **Recently uploaded** list.
 
-**Important:** Camera upload is not continuous or automatic backup. Windows 10 Mobile does not provide dependable long-running background transfer for this independent app, so the user must manually choose media and keep LiveDrive active until uploads finish.
+**Important:** Scheduled Camera Roll backup is not continuous or guaranteed. Windows 10 Mobile does not provide dependable long-running background transfer for this independent app, so the user should keep LiveDrive active for manual uploads that must finish promptly.
 
 ## Local data and controls
 
 - Stores Photos cache data, thumbnail cache data, and recent camera-upload names in LiveDrive's private local storage.
+- Offers Live Tile modes for OneDrive storage usage, the most recent OneDrive file, a selected cached photo, or a selected LiveDrive album.
 - Clears the local photo index and camera-upload history when the user signs in or signs out.
 - Applies theme preference changes on the next LiveDrive launch for compatibility with the supported Mobile platform.
 - Provides an About panel with LiveDrive's independent-app disclaimer, installed build version, and ZuneTracks project link.

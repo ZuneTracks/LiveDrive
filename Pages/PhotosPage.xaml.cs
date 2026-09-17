@@ -41,6 +41,7 @@ namespace LiveDrive.Pages
         private ScrollViewer _photoScrollViewer;
         private PhotoAlbum _album;
         private PhotoCollection _collection;
+        private bool _showVideos;
         private readonly DataTransferManager _shareManager;
         private StorageFile _shareFile;
         private string _shareTitle;
@@ -71,6 +72,14 @@ namespace LiveDrive.Pages
             await LoadPhotosAsync();
         }
 
+        private void BackButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Frame.CanGoBack)
+            {
+                Frame.GoBack();
+            }
+        }
+
         private async void SourceFoldersButton_Click(object sender, RoutedEventArgs e)
         {
             if (_isLoading)
@@ -80,8 +89,16 @@ namespace LiveDrive.Pages
 
             try
             {
-                var sources = await PromptForSourceFoldersAsync();
+                var snapshot = await _services.PhotoIndex.LoadAsync();
+                var sources = await PromptForSourceFoldersAsync(snapshot.SourceFolders);
                 if (sources == null)
+                {
+                    return;
+                }
+
+                var existingSourceIds = new HashSet<string>(snapshot.SourceFolders.Select(source => source.Id), StringComparer.Ordinal);
+                var selectedSourceIds = new HashSet<string>(sources.Select(source => source.Id), StringComparer.Ordinal);
+                if (existingSourceIds.SetEquals(selectedSourceIds))
                 {
                     return;
                 }
@@ -198,7 +215,13 @@ namespace LiveDrive.Pages
             }
             _album = e.Parameter as PhotoAlbum;
             _collection = e.Parameter as PhotoCollection;
-            PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title : "Photos";
+            _showVideos = string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
+            PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title :
+                _showVideos ? "Videos" : "Photos";
+            BackButton.Visibility = (_album != null || _collection != null) && Frame.CanGoBack
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            AlbumInfoText.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
             SetEmptyMessage();
             base.OnNavigatedTo(e);
         }
@@ -227,9 +250,10 @@ namespace LiveDrive.Pages
                 if (_album == null && _collection == null)
                 {
                     var preview = await _services.PhotoIndex.LoadPreviewAsync();
-                    if (preview.Count > 0)
+                    var filteredPreview = FilterPhotos(preview).ToList();
+                    if (filteredPreview.Count > 0)
                     {
-                        RenderPhotos(preview);
+                        RenderPhotos(filteredPreview);
                         LoadingPanel.Visibility = Visibility.Collapsed;
                         SetSyncStatus("Showing cached photos. Loading your library…");
                         hasPreview = true;
@@ -264,14 +288,14 @@ namespace LiveDrive.Pages
                     EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                     return;
                 }
-                RenderPhotos(snapshot.Items);
+                RenderPhotos(FilterPhotos(snapshot.Items));
                 LoadingPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 SetSyncStatus(Photos.Count == 0
                     ? "Finding photos across your drive…"
                     : "Showing cached photos. Checking for updates…");
                 if (!hasPreview)
                 {
-                    await _services.PhotoIndex.SavePreviewAsync(Photos);
+                    await _services.PhotoIndex.SavePreviewAsync(snapshot.Items);
                 }
 
                 var indexedPhotos = snapshot.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
@@ -313,9 +337,9 @@ namespace LiveDrive.Pages
                             }
                         }
 
-                        if (!hasVisiblePhotos && indexedPhotos.Count > 0)
+                        if (!hasVisiblePhotos && FilterPhotos(indexedPhotos.Values).Any())
                         {
-                            RenderPhotos(indexedPhotos.Values);
+                            RenderPhotos(FilterPhotos(indexedPhotos.Values));
                             LoadingPanel.Visibility = Visibility.Collapsed;
                             hasVisiblePhotos = true;
                         }
@@ -340,9 +364,9 @@ namespace LiveDrive.Pages
                     }
                 }
 
-                RenderPhotos(indexedPhotos.Values);
+                RenderPhotos(FilterPhotos(indexedPhotos.Values));
                 LoadingPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-                await _services.PhotoIndex.SaveAsync(_allPhotos, snapshot.SourceFolders);
+                await _services.PhotoIndex.SaveAsync(indexedPhotos.Values, snapshot.SourceFolders);
                 EmptyPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception exception)
@@ -363,9 +387,15 @@ namespace LiveDrive.Pages
             SyncStatusText.Text = text;
         }
 
-        private async Task<List<PhotoSourceFolder>> PromptForSourceFoldersAsync()
+        private async Task<List<PhotoSourceFolder>> PromptForSourceFoldersAsync(
+            IEnumerable<PhotoSourceFolder> existingSources = null)
         {
             var selected = new Dictionary<string, PhotoSourceFolder>(StringComparer.Ordinal);
+            foreach (var source in existingSources ?? Enumerable.Empty<PhotoSourceFolder>())
+            {
+                selected[source.Id] = new PhotoSourceFolder { Id = source.Id, Name = source.Name };
+            }
+            var managesExistingSources = selected.Count > 0;
             var history = new List<PhotoSourceFolder>();
             var folderList = new ListView { SelectionMode = ListViewSelectionMode.None, Height = 320 };
             var folderPath = new TextBlock { Text = "OneDrive", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -376,7 +406,9 @@ namespace LiveDrive.Pages
             var content = new StackPanel();
             content.Children.Add(new TextBlock
             {
-                Text = "Select each folder whose photos and videos LiveDrive should include. Open a folder to choose a nested photo folder.",
+                Text = !managesExistingSources
+                    ? "Select each folder whose photos and videos LiveDrive should include. Open a folder to choose a nested photo folder."
+                    : "Select folders to include in Photos. Clear a selected folder to remove its photos from this device's Photos view.",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 12)
             });
@@ -384,11 +416,11 @@ namespace LiveDrive.Pages
             content.Children.Add(folderList);
             var dialog = new ContentDialog
             {
-                Title = "Choose photo folders",
+                Title = managesExistingSources ? "Manage photo folders" : "Choose photo folders",
                 Content = content,
-                PrimaryButtonText = "Use selected folders",
+                PrimaryButtonText = managesExistingSources ? "Save folders" : "Use selected folders",
                 CloseButtonText = "Cancel",
-                IsPrimaryButtonEnabled = false
+                IsPrimaryButtonEnabled = managesExistingSources
             };
 
             Func<string, string, Task> loadFolder = null;
@@ -434,7 +466,7 @@ namespace LiveDrive.Pages
                     selector.Unchecked += (sender, args) =>
                     {
                         selected.Remove(folder.Id);
-                        dialog.IsPrimaryButtonEnabled = selected.Count > 0;
+                        dialog.IsPrimaryButtonEnabled = managesExistingSources || selected.Count > 0;
                     };
                     var openButton = new Button
                     {
@@ -584,9 +616,29 @@ namespace LiveDrive.Pages
                 return;
             }
 
+            ShowPhotoMenu(tile, item);
+        }
+
+        private void PhotoTile_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var tile = sender as FrameworkElement;
+            var item = tile?.Tag as DriveItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            ShowPhotoMenu(tile, item);
+        }
+
+        private void ShowPhotoMenu(FrameworkElement tile, DriveItem item)
+        {
             var menu = new MenuFlyout();
             var view = new MenuFlyoutItem { Text = "View" };
             view.Click += async (menuSender, menuArgs) => await ViewPhotoAsync(item);
+            var fileInfo = new MenuFlyoutItem { Text = "File info" };
+            fileInfo.Click += async (menuSender, menuArgs) => await FileInfoDialog.ShowAsync(item);
             var addToAlbum = new MenuFlyoutItem { Text = "Add to album" };
             addToAlbum.Click += async (menuSender, menuArgs) => await AddPhotosToAlbumAsync(new[] { item });
             var saveAs = new MenuFlyoutItem { Text = "Save as" };
@@ -600,6 +652,7 @@ namespace LiveDrive.Pages
             var delete = new MenuFlyoutItem { Text = "Delete" };
             delete.Click += async (menuSender, menuArgs) => await DeletePhotoAsync(item);
             menu.Items.Add(view);
+            menu.Items.Add(fileInfo);
             menu.Items.Add(addToAlbum);
             menu.Items.Add(saveAs);
             menu.Items.Add(share);
@@ -723,10 +776,10 @@ namespace LiveDrive.Pages
             var count = photosToDelete.Count;
             var dialog = new ContentDialog
             {
-                Title = count == 1 ? "Delete photo?" : "Delete photos?",
+                Title = count == 1 ? "Delete file?" : "Delete files?",
                 Content = count == 1
                     ? "Delete " + photosToDelete[0].Name + " from OneDrive? It can be restored from the OneDrive recycle bin."
-                    : "Delete " + count + " photos from OneDrive? They can be restored from the OneDrive recycle bin.",
+                    : "Delete " + count + " files from OneDrive? They can be restored from the OneDrive recycle bin.",
                 PrimaryButtonText = "Delete",
                 CloseButtonText = "Cancel"
             };
@@ -749,7 +802,7 @@ namespace LiveDrive.Pages
                 ClearPhotoSelection();
                 await PageFeedback.ShowInfoAsync(count == 1
                     ? "Deleted " + photosToDelete[0].Name + "."
-                    : "Deleted " + count + " photos.");
+                    : "Deleted " + count + " files.");
             }
             catch (Exception exception)
             {
@@ -833,7 +886,7 @@ namespace LiveDrive.Pages
                 var picker = new ListBox
                 {
                     ItemsSource = albums,
-                    DisplayMemberPath = "Name",
+                    ItemTemplate = Resources["AlbumPickerItemTemplate"] as DataTemplate,
                     SelectionMode = SelectionMode.Single
                 };
                 var dialog = new ContentDialog
@@ -952,13 +1005,20 @@ namespace LiveDrive.Pages
                 return items.Where(item => _album.ItemIds.Contains(item.Id));
             }
 
-            if (_collection.IsOnThisDay)
+            if (_collection != null && _collection.IsOnThisDay)
             {
                 var today = DateTimeOffset.Now;
-                return items.Where(item => IsOnThisDay(item, today));
+                return items.Where(item => IsImageFile(item) && IsOnThisDay(item, today));
             }
 
-            return items.Where(item => GetMonthKey(item) == _collection.MonthKey);
+            if (_collection != null)
+            {
+                return items.Where(item => IsImageFile(item) && GetMonthKey(item) == _collection.MonthKey);
+            }
+
+            return _showVideos
+                ? items.Where(IsVideoFile)
+                : items.Where(IsImageFile);
         }
 
         private void SetEmptyMessage()
@@ -970,8 +1030,9 @@ namespace LiveDrive.Pages
                 return;
             }
 
-            EmptyTitle.Text = "No photos found.";
-            EmptyDescription.Text = "Photos in your selected OneDrive folders will appear here.";
+            EmptyTitle.Text = _showVideos ? "No videos found." : "No photos found.";
+            EmptyDescription.Text = (_showVideos ? "Videos" : "Photos") +
+                " in your selected OneDrive folders will appear here.";
         }
 
         private static string GetMonthKey(DriveItem item)
@@ -1032,8 +1093,17 @@ namespace LiveDrive.Pages
 
         private static bool IsMediaFile(DriveItem item)
         {
-            return item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-                   item.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
+            return IsImageFile(item) || IsVideoFile(item);
+        }
+
+        private static bool IsImageFile(DriveItem item)
+        {
+            return item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsVideoFile(DriveItem item)
+        {
+            return item.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
         }
 
         private async void PhotosGrid_ItemClick(object sender, ItemClickEventArgs e)

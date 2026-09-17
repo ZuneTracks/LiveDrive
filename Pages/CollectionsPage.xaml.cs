@@ -29,7 +29,7 @@ namespace LiveDrive.Pages
                 var snapshot = await _services.PhotoIndex.LoadAsync();
                 Collections.Clear();
                 var today = DateTimeOffset.Now;
-                var memories = snapshot.Items.Where(item => IsOnThisDay(item, today)).ToList();
+                var memories = snapshot.Items.Where(item => IsImageFile(item) && IsOnThisDay(item, today)).ToList();
                 if (memories.Count > 0)
                 {
                     Collections.Add(new PhotoCollection
@@ -40,6 +40,7 @@ namespace LiveDrive.Pages
                     });
                 }
                 var groups = snapshot.Items
+                    .Where(IsImageFile)
                     .GroupBy(GetCollectionMonth)
                     .OrderByDescending(group => group.Key);
                 foreach (var group in groups)
@@ -79,6 +80,11 @@ namespace LiveDrive.Pages
                 return false;
             }
             return date.Year < today.Year && date.Month == today.Month && date.Day == today.Day;
+        }
+
+        private static bool IsImageFile(DriveItem item)
+        {
+            return item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
         }
 
         private void CollectionsList_ItemClick(object sender, ItemClickEventArgs e)

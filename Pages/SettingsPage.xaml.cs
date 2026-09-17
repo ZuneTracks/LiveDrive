@@ -1,5 +1,8 @@
 using System;
+using System.Linq;
+using System.Threading.Tasks;
 using LiveDrive.Helpers;
+using LiveDrive.Models;
 using LiveDrive.Services;
 using Windows.ApplicationModel;
 using Windows.UI.Xaml;
@@ -24,6 +27,9 @@ namespace LiveDrive.Pages
             {
                 var token = await _services.Auth.GetStoredTokenAsync();
                 AccountStatus.Text = token == null ? "Not signed in." : "Signed in. Your session is stored securely on this device.";
+                SelectLiveTileMode(_services.LiveTile.Mode);
+                await UpdateStorageStatusAsync(token != null);
+                UpdateLiveTileControls();
             };
         }
 
@@ -34,7 +40,9 @@ namespace LiveDrive.Pages
                 await _services.Auth.SignInAsync();
                 await _services.PhotoIndex.ClearAsync();
                 _services.CameraUploadHistory.Clear();
+                _services.CameraBackupState.Clear();
                 AccountStatus.Text = "Signed in. Open Drive to browse your files.";
+                await UpdateStorageStatusAsync(true);
             }
             catch (Exception exception)
             {
@@ -47,7 +55,138 @@ namespace LiveDrive.Pages
             await _services.Auth.SignOutAsync();
             await _services.PhotoIndex.ClearAsync();
             _services.CameraUploadHistory.Clear();
+            _services.CameraBackupState.Clear();
+            _services.CameraBackupScheduler.Disable();
+            _services.LiveTile.Clear();
             AccountStatus.Text = "Not signed in.";
+            StorageStatus.Text = "OneDrive storage is available after you sign in.";
+        }
+
+        private async void LiveTileMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing || LiveTileMode.SelectedItem == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var mode = ((ComboBoxItem)LiveTileMode.SelectedItem).Tag as string;
+                _services.LiveTile.SetMode(mode);
+                await _services.LiveTile.UpdateAsync();
+                UpdateLiveTileControls();
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async void ChooseTileItemButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_services.LiveTile.Mode == LiveTileService.SelectedPhoto)
+                {
+                    var photos = (await _services.PhotoIndex.LoadAsync()).Items;
+                    await ChooseTileItemAsync(photos, "Choose photo for Live Tile");
+                }
+                else if (_services.LiveTile.Mode == LiveTileService.SelectedAlbum)
+                {
+                    await ChooseTileItemAsync(await _services.Albums.GetAlbumsAsync(), "Choose album for Live Tile");
+                }
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async void RefreshLiveTileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                RefreshLiveTileButton.IsEnabled = false;
+                await _services.LiveTile.UpdateAsync();
+                LiveTileStatus.Text = _services.LiveTile.Mode == LiveTileService.Off
+                    ? "The Live Tile is off."
+                    : "Live Tile refreshed.";
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+            finally
+            {
+                RefreshLiveTileButton.IsEnabled = true;
+            }
+        }
+
+        private async Task ChooseTileItemAsync<T>(System.Collections.Generic.IEnumerable<T> items, string title)
+        {
+            var picker = new ListBox { ItemsSource = items, DisplayMemberPath = "Name", SelectionMode = SelectionMode.Single };
+            var dialog = new ContentDialog { Title = title, Content = picker, PrimaryButtonText = "Choose", CloseButtonText = "Cancel", IsPrimaryButtonEnabled = false };
+            picker.SelectionChanged += (sender, args) => dialog.IsPrimaryButtonEnabled = picker.SelectedItem != null;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || picker.SelectedItem == null)
+            {
+                return;
+            }
+
+            if (picker.SelectedItem is DriveItem photo)
+            {
+                _services.LiveTile.SetSelection(photo.Id, photo.Name);
+            }
+            else if (picker.SelectedItem is PhotoAlbum album)
+            {
+                _services.LiveTile.SetSelection(album.Id, album.Name);
+            }
+            await _services.LiveTile.UpdateAsync();
+            UpdateLiveTileControls();
+        }
+
+        private async Task UpdateStorageStatusAsync(bool isSignedIn)
+        {
+            if (!isSignedIn)
+            {
+                StorageStatus.Text = "OneDrive storage is available after you sign in.";
+                return;
+            }
+            try
+            {
+                var quota = await _services.Graph.GetQuotaAsync();
+                StorageStatus.Text = "OneDrive storage: " + FormatStorage(quota.Used) + " of " + FormatStorage(quota.Total) + " used.";
+            }
+            catch (Exception exception)
+            {
+                StorageStatus.Text = "Could not load OneDrive storage: " + exception.Message;
+            }
+        }
+
+        private void SelectLiveTileMode(string mode)
+        {
+            _isInitializing = true;
+            LiveTileMode.SelectedItem = LiveTileMode.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(item => string.Equals(item.Tag as string, mode, StringComparison.Ordinal));
+            _isInitializing = false;
+        }
+
+        private void UpdateLiveTileControls()
+        {
+            var needsSelection = _services.LiveTile.Mode == LiveTileService.SelectedPhoto ||
+                _services.LiveTile.Mode == LiveTileService.SelectedAlbum;
+            ChooseTileItemButton.Visibility = needsSelection ? Visibility.Visible : Visibility.Collapsed;
+            LiveTileStatus.Text = _services.LiveTile.Mode == LiveTileService.Off
+                ? "The Live Tile is off."
+                : needsSelection && string.IsNullOrEmpty(_services.LiveTile.SelectedName)
+                    ? "Choose an item for the Live Tile."
+                    : needsSelection ? "Showing " + _services.LiveTile.SelectedName + " on the Live Tile."
+                    : "The Live Tile updates when LiveDrive refreshes.";
+        }
+
+        private static string FormatStorage(long bytes)
+        {
+            const long gigabyte = 1024L * 1024 * 1024;
+            return string.Format("{0:0.#} GB", (double)bytes / gigabyte);
         }
 
         private async void ThemeToggle_Toggled(object sender, RoutedEventArgs e)

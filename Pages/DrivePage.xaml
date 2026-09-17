@@ -21,6 +21,7 @@
             <AppBarSeparator/>
             <AppBarButton x:Name="SelectAllButton" Icon="SelectAll" Label="Select all" Click="SelectAllButton_Click"/>
             <AppBarButton x:Name="ViewButton" Icon="View" Label="View" IsEnabled="False" Click="ViewButton_Click"/>
+            <AppBarButton x:Name="FileInfoButton" Label="File info" IsEnabled="False" Click="FileInfoButton_Click"/>
             <AppBarButton x:Name="SaveAsButton" Label="Save as" IsEnabled="False" Click="SaveAsButton_Click"/>
             <AppBarButton x:Name="ShareButton" Label="View link" IsEnabled="False" Click="ShareButton_Click"/>
             <AppBarButton x:Name="CopyButton" Label="Copy" IsEnabled="False" Click="CopyButton_Click"/>
@@ -32,7 +33,7 @@
         <ListView x:Name="ItemsList" SelectionMode="Multiple" SelectionChanged="ItemsList_SelectionChanged">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:DriveItem">
-                        <Border Style="{StaticResource LiveDriveListRowStyle}">
+                        <Border Style="{StaticResource LiveDriveListRowStyle}" RightTapped="DriveItem_RightTapped">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>

@@ -30,7 +30,7 @@ namespace LiveDrive.Services
             var path = string.IsNullOrEmpty(folderId)
                 ? "/me/drive/root/children"
                 : "/me/drive/items/" + Uri.EscapeDataString(folderId) + "/children";
-            var json = await GetJsonAsync(path + "?$select=id,name,folder,file,size,lastModifiedDateTime,@microsoft.graph.downloadUrl&$orderby=name");
+            var json = await GetJsonAsync(path + "?$select=id,name,folder,file,size,createdDateTime,lastModifiedDateTime,parentReference,@microsoft.graph.downloadUrl&$orderby=name");
             return ReadItems(json);
         }
 
@@ -71,9 +71,25 @@ namespace LiveDrive.Services
             };
         }
 
+        public async Task<OneDriveQuota> GetQuotaAsync()
+        {
+            var drive = await GetJsonAsync("/me/drive?$select=quota");
+            var quota = drive.GetNamedObject("quota", null);
+            return new OneDriveQuota
+            {
+                Used = quota == null ? 0 : (long)quota.GetNamedNumber("used", 0),
+                Total = quota == null ? 0 : (long)quota.GetNamedNumber("total", 0)
+            };
+        }
+
+        public async Task<IReadOnlyList<DriveItem>> GetRecentAsync()
+        {
+            return ReadItems(await GetJsonAsync("/me/drive/recent?$select=id,name,file,folder,size,createdDateTime,lastModifiedDateTime,parentReference"));
+        }
+
         public async Task<DriveItemPage> GetPhotoDeltaPageAsync(string nextLink, string folderId)
         {
-            const string fields = "$select=id,name,folder,file,photo,size,lastModifiedDateTime,deleted&$top=100";
+            const string fields = "$select=id,name,folder,file,photo,size,createdDateTime,lastModifiedDateTime,parentReference,deleted&$top=100";
             var path = string.IsNullOrEmpty(folderId)
                 ? "/me/drive/root/delta?" + fields
                 : "/me/drive/items/" + Uri.EscapeDataString(folderId) + "/delta?" + fields;
@@ -158,7 +174,7 @@ namespace LiveDrive.Services
             public async Task<IReadOnlyList<DriveItem>> SearchAsync(string query)
         {
             var escapedQuery = Uri.EscapeDataString(query.Replace("'", "''"));
-            var path = "/me/drive/root/search(q='" + escapedQuery + "')?$select=id,name,folder,file,size,lastModifiedDateTime,@microsoft.graph.downloadUrl";
+            var path = "/me/drive/root/search(q='" + escapedQuery + "')?$select=id,name,folder,file,size,createdDateTime,lastModifiedDateTime,parentReference,@microsoft.graph.downloadUrl";
             return ReadItems(await GetJsonAsync(path));
         }
 
@@ -347,7 +363,21 @@ namespace LiveDrive.Services
 
         private async Task<JsonObject> GetJsonAsync(string path)
         {
-            return await SendJsonAsync(new HttpRequestMessage(HttpMethod.Get, path));
+            const int maximumAttempts = 3;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    using (var request = new HttpRequestMessage(HttpMethod.Get, path))
+                    {
+                        return await SendJsonAsync(request);
+                    }
+                }
+                catch (Exception exception) when (IsTransientNetworkFailure(exception) && attempt < maximumAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(attempt));
+                }
+            }
         }
 
         private async Task<JsonObject> SendJsonAsync(HttpRequestMessage request)
@@ -384,6 +414,12 @@ namespace LiveDrive.Services
             }
         }
 
+        private static bool IsTransientNetworkFailure(Exception exception)
+        {
+            const int ConnectionResetHResult = unchecked((int)0x80072EFF);
+            return exception.HResult == ConnectionResetHResult || exception is HttpRequestException;
+        }
+
         private static IReadOnlyList<DriveItem> ReadItems(JsonObject json)
         {
             var items = new List<DriveItem>();
@@ -398,6 +434,7 @@ namespace LiveDrive.Services
                 var entry = value.GetObject();
                 var file = entry.GetNamedObject("file", null);
                 var photo = entry.GetNamedObject("photo", null);
+                var parentReference = entry.GetNamedObject("parentReference", null);
                 var thumbnailUrl = string.Empty;
                 var thumbnails = entry.GetNamedArray("thumbnails", null);
                 if (thumbnails != null && thumbnails.Count > 0)
@@ -418,7 +455,9 @@ namespace LiveDrive.Services
                     Name = entry.GetNamedString("name", "Unnamed item"),
                     IsFolder = entry.GetNamedObject("folder", null) != null,
                     Size = (long)entry.GetNamedNumber("size", 0),
+                    Created = entry.GetNamedString("createdDateTime", string.Empty),
                     LastModified = entry.GetNamedString("lastModifiedDateTime", string.Empty),
+                    OneDriveLocation = parentReference == null ? string.Empty : parentReference.GetNamedString("path", string.Empty),
                     DownloadUrl = entry.GetNamedString("@microsoft.graph.downloadUrl", string.Empty),
                     ThumbnailUrl = thumbnailUrl,
                     MimeType = file == null ? string.Empty : file.GetNamedString("mimeType", string.Empty),
