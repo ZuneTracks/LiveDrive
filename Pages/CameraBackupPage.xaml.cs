@@ -94,7 +94,7 @@ namespace LiveDrive.Pages
                 _isCheckingCameraRoll = true;
                 CheckCameraRollButton.IsEnabled = false;
                 ScheduledBackupStatus.Text = "Checking Camera Roll…";
-                var progress = new Progress<string>(status => ScheduledBackupStatus.Text = status);
+                var progress = new DelegateProgress<string>(status => ScheduledBackupStatus.Text = status);
                 var uploadedCount = await _services.CameraBackup.UploadNewCameraRollItemsAsync(
                     CancellationToken.None, progress);
                 await LoadRecentlyUploadedAsync();
