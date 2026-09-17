@@ -34,10 +34,15 @@ namespace LiveDrive.Services
             var supportedFiles = files
                 .Where(file => SupportedExtensions.Contains(Path.GetExtension(file.Name)))
                 .ToList();
-            var pendingFiles = supportedFiles
-                .Where(file => !_state.HasUploaded(file.Path))
-                .OrderBy(file => file.DateCreated)
-                .ToList();
+            var pendingFiles = new List<StorageFile>();
+            foreach (var file in supportedFiles)
+            {
+                if (!await _state.HasUploadedAsync(file.Path))
+                {
+                    pendingFiles.Add(file);
+                }
+            }
+            pendingFiles = pendingFiles.OrderBy(file => file.DateCreated).ToList();
             if (pendingFiles.Count == 0)
             {
                 _state.SaveLastResult("Found " + supportedFiles.Count + " supported Camera Roll " +
@@ -52,7 +57,7 @@ namespace LiveDrive.Services
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Report("Uploading " + file.Name + "…");
                 await _graph.UploadAsync(destination.Id, file, null, true);
-                _state.MarkUploaded(file.Path);
+                await _state.MarkUploadedAsync(file.Path);
                 await _history.AddAsync(file.Name);
                 uploadedCount++;
             }

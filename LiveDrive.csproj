@@ -82,6 +82,7 @@
     <NoStdLib>true</NoStdLib>
     <DebugType>pdbonly</DebugType>
     <PlatformTarget>ARM</PlatformTarget>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <LangVersion>7.3</LangVersion>
     <Prefer32Bit>true</Prefer32Bit>

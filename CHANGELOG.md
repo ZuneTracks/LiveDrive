@@ -2,7 +2,7 @@
 
 All notable user-facing changes are documented here.
 
-## 1.5.9 - 2026-09-16
+## 1.6.0 - 2026-09-17
 
 ### Features
 
@@ -48,3 +48,5 @@ All notable user-facing changes are documented here.
   without filename overlays.
 - Limited SD-card Camera Roll discovery to likely camera-folder paths, preventing a
   manual check from traversing an entire removable drive.
+- Fixed Camera Roll backup history exceeding the Windows Phone application-settings
+  size limit after repeated scans.
