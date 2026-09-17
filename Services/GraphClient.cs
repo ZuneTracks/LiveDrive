@@ -105,40 +105,62 @@ namespace LiveDrive.Services
         public async Task<string> GetThumbnailUrlAsync(string itemId, string size, CancellationToken cancellationToken)
         {
             var thumbnailSize = size == "large" ? "large" : "medium";
-            using (var request = new HttpRequestMessage(HttpMethod.Get,
-                "/me/drive/items/" + Uri.EscapeDataString(itemId) + "/thumbnails/0/" + thumbnailSize))
-            using (var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, true, cancellationToken))
+            const int maximumAttempts = 3;
+            for (var attempt = 1; ; attempt++)
             {
-                if (response.StatusCode == HttpStatusCode.NotFound)
+                try
                 {
-                    return string.Empty;
-                }
+                    using (var request = new HttpRequestMessage(HttpMethod.Get,
+                        "/me/drive/items/" + Uri.EscapeDataString(itemId) + "/thumbnails/0/" + thumbnailSize))
+                    using (var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, true, cancellationToken))
+                    {
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            return string.Empty;
+                        }
 
-                var json = JsonObject.Parse(await response.Content.ReadAsStringAsync());
-                return json.GetNamedString("url", string.Empty);
+                        var json = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+                        return json.GetNamedString("url", string.Empty);
+                    }
+                }
+                catch (Exception exception) when (IsTransientNetworkFailure(exception) && attempt < maximumAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+                }
             }
         }
 
         public async Task<bool> DownloadThumbnailAsync(string thumbnailUrl, StorageFile destination, CancellationToken cancellationToken)
         {
-            using (var response = await _http.GetAsync(thumbnailUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+            const int maximumAttempts = 3;
+            for (var attempt = 1; ; attempt++)
             {
-                if (response.StatusCode == HttpStatusCode.NotFound)
+                try
                 {
-                    return false;
-                }
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new InvalidOperationException("Thumbnail download failed (" + (int)response.StatusCode + ").");
-                }
+                    using (var response = await _http.GetAsync(thumbnailUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+                    {
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            return false;
+                        }
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            throw new InvalidOperationException("Thumbnail download failed (" + (int)response.StatusCode + ").");
+                        }
 
-                using (var source = await response.Content.ReadAsStreamAsync())
-                using (var output = await destination.OpenStreamForWriteAsync())
-                {
-                    output.SetLength(0);
-                    await source.CopyToAsync(output);
+                        using (var source = await response.Content.ReadAsStreamAsync())
+                        using (var output = await destination.OpenStreamForWriteAsync())
+                        {
+                            output.SetLength(0);
+                            await source.CopyToAsync(output);
+                        }
+                        return true;
+                    }
                 }
-                return true;
+                catch (Exception exception) when (IsTransientNetworkFailure(exception) && attempt < maximumAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+                }
             }
         }
 
@@ -417,7 +439,10 @@ namespace LiveDrive.Services
         private static bool IsTransientNetworkFailure(Exception exception)
         {
             const int ConnectionResetHResult = unchecked((int)0x80072EFF);
-            return exception.HResult == ConnectionResetHResult || exception is HttpRequestException;
+            return exception.HResult == ConnectionResetHResult ||
+                exception is HttpRequestException ||
+                string.Equals(exception.Message, "net_http_client_execution_error", StringComparison.OrdinalIgnoreCase) ||
+                (exception.InnerException != null && IsTransientNetworkFailure(exception.InnerException));
         }
 
         private static IReadOnlyList<DriveItem> ReadItems(JsonObject json)

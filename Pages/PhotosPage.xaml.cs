@@ -586,7 +586,7 @@ namespace LiveDrive.Pages
                 if (!_thumbnailErrorShown)
                 {
                     _thumbnailErrorShown = true;
-                    await PageFeedback.ShowErrorAsync(exception);
+                    SetSyncStatus("Some thumbnails could not be loaded. Refresh to try again.");
                 }
             }
             finally

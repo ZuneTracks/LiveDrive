@@ -5,6 +5,7 @@ LiveDrive is an independent, phone-friendly UWP prototype for browsing a persona
 ## Public documents
 
 - [App description and feature set](APP_DESCRIPTION.md)
+- [Changelog](CHANGELOG.md)
 - [Privacy Policy](https://zunetracks.github.io/LiveDrive/privacy.html)
 - [Terms of Service](https://zunetracks.github.io/LiveDrive/terms.html)
 
@@ -22,7 +23,7 @@ The GitHub Pages site source is in `docs/`.
 
 - Microsoft sign-in through `WebAuthenticationBroker`, authorization code + PKCE, refresh tokens in PasswordVault.
 - Browse folders, navigate upward, search, upload files to a user-selected OneDrive folder, download/open files, save-as, create anonymous view links, and copy, move, or delete selected files/folders where the account policy permits it. Copy and move name conflicts preserve the destination file and create an automatically numbered copy, such as `photo (1).jpg`.
-- Camera backup page that queues manually selected photos/videos while the app remains foregrounded and uploads them to a root-level `LiveDrive Camera Roll` folder. Users can use **Check Camera Roll now** for an immediate scan or opt into a best-effort 15-minute Camera Roll scan that uploads newly detected supported media. Queue items can be removed before uploading; selecting an already-queued device file skips it. Queue status appears only for uploads in progress or failures. Completed uploads leave the active queue and remain available from the persisted **Recently uploaded** list. Name conflicts in OneDrive are saved as new copies rather than overwriting the existing file.
+- Camera backup page that queues manually selected photos/videos while the app remains foregrounded and uploads them to a root-level `LiveDrive Camera Roll` folder. Users can use **Check Camera Roll now** for an immediate scan or opt into a best-effort 15-minute Camera Roll scan that uploads newly detected supported media. Scans include the Camera Roll library and accessible SD-card folders named `Camera Roll`; manual checks show the current scan or upload stage. Queue items can be removed before uploading; selecting an already-queued device file skips it. Queue status appears only for uploads in progress or failures. Completed uploads leave the active queue and remain available from the persisted **Recently uploaded** list. Name conflicts in OneDrive are saved as new copies rather than overwriting the existing file.
 - The first Photos visit lets the user choose OneDrive folders to include; LiveDrive caches only those folders and retains a separate delta link for each source. Change the selection later with **Folders** on the Photos command bar.
 - Photos render cached metadata immediately and load thumbnails only as tiles become visible, with at most two thumbnail requests active at once.
 - After the first complete sync, LiveDrive stores a compact 150-photo preview and retains the full index in memory. The photo grid renders and scrolls in small batches while synchronization updates the non-blocking footer indicator.
