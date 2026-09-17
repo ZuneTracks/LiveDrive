@@ -2,7 +2,11 @@ using System.ComponentModel;
 
 namespace LiveDrive.Models
 {
+#if BACKGROUND_TASK
+    internal sealed class DriveItem : INotifyPropertyChanged
+#else
     public sealed class DriveItem : INotifyPropertyChanged
+#endif
     {
         public string Id { get; set; }
         public string Name { get; set; }

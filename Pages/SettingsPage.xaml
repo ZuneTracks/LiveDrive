@@ -28,6 +28,12 @@
             <TextBlock Text="Appearance" Style="{StaticResource LiveDriveSectionTitleStyle}"/>
             <ToggleSwitch x:Name="ThemeToggle" Header="Dark mode" Toggled="ThemeToggle_Toggled" Margin="0,0,0,8"/>
             <TextBlock x:Name="ThemeStatus" TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}" Margin="0,0,0,4"/>
+            <TextBlock Text="Notifications" Style="{StaticResource LiveDriveSectionTitleStyle}"/>
+            <Button x:Name="NotificationDiagnosticButton" Content="Run notification diagnostic"
+                    Click="NotificationDiagnosticButton_Click" HorizontalAlignment="Left"
+                    Style="{StaticResource LiveDriveQuietButtonStyle}" Margin="0,0,0,4"/>
+            <TextBlock x:Name="NotificationDiagnosticStatus" TextWrapping="Wrap"
+                       Foreground="{ThemeResource MutedTextBrush}" Margin="0,0,0,12"/>
             <TextBlock Text="Privacy" Style="{StaticResource LiveDriveSectionTitleStyle}"/>
             <TextBlock Text="Tokens are stored in the device PasswordVault. LiveDrive calls Microsoft Graph directly and does not contain a client secret."
                        TextWrapping="Wrap" Foreground="{ThemeResource MutedTextBrush}"/>

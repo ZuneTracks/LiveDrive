@@ -3,7 +3,7 @@
          xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          IgnorableNamespaces="uap mp">
-  <Identity Name="ZuneTracks.LiveDriveUWP" Publisher="CN=3ED86B18-5F5F-4AE0-AA9C-697B841F55A7" Version="1.6.0.0" />
+  <Identity Name="ZuneTracks.LiveDriveUWP" Publisher="CN=3ED86B18-5F5F-4AE0-AA9C-697B841F55A7" Version="1.6.4.0" />
   <mp:PhoneIdentity PhoneProductId="fbd83fa5-4f82-4ff8-abd3-fc6abb31ed10"
                     PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
@@ -25,6 +25,14 @@
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
+      <Extensions>
+        <Extension Category="windows.backgroundTasks"
+                   EntryPoint="LiveDrive.BackgroundTasks.CameraBackupBackgroundTask">
+          <BackgroundTasks>
+            <Task Type="timer" />
+          </BackgroundTasks>
+        </Extension>
+      </Extensions>
     </Application>
   </Applications>
   <Capabilities>

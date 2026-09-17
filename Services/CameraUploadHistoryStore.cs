@@ -6,7 +6,11 @@ using Windows.Storage;
 
 namespace LiveDrive.Services
 {
+#if BACKGROUND_TASK
+    internal sealed class CameraUploadHistoryStore
+#else
     public sealed class CameraUploadHistoryStore
+#endif
     {
         private const string SettingName = "CameraUploadHistory";
         private const int MaximumItems = 50;

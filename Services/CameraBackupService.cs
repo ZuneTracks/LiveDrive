@@ -8,7 +8,11 @@ using Windows.Storage;
 
 namespace LiveDrive.Services
 {
+#if BACKGROUND_TASK
+    internal sealed class CameraBackupService
+#else
     public sealed class CameraBackupService
+#endif
     {
         private static readonly HashSet<string> SupportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -30,6 +34,7 @@ namespace LiveDrive.Services
         public async Task<int> UploadNewCameraRollItemsAsync(CancellationToken cancellationToken,
             IProgress<string> progress = null)
         {
+            _state.SaveLastScanStarted(DateTimeOffset.Now);
             var files = await GetCameraRollFilesAsync(cancellationToken, progress);
             var supportedFiles = files
                 .Where(file => SupportedExtensions.Contains(Path.GetExtension(file.Name)))
@@ -51,22 +56,52 @@ namespace LiveDrive.Services
             }
 
             var destination = await _graph.GetOrCreateRootFolderAsync("LiveDrive Camera Roll");
+            var existingNames = new HashSet<string>(
+                (await _graph.GetChildrenAsync(destination.Id))
+                    .Where(item => !item.IsFolder)
+                    .Select(item => item.Name),
+                StringComparer.OrdinalIgnoreCase);
+            var skippedFiles = pendingFiles
+                .Where(file => existingNames.Contains(file.Name))
+                .ToList();
+            var newNames = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+            var filesToUpload = new List<StorageFile>();
+            foreach (var file in pendingFiles.Where(file => !existingNames.Contains(file.Name)))
+            {
+                if (newNames.Add(file.Name))
+                {
+                    filesToUpload.Add(file);
+                }
+                else
+                {
+                    skippedFiles.Add(file);
+                }
+            }
+            foreach (var file in skippedFiles)
+            {
+                await _state.MarkUploadedAsync(file.Path);
+            }
+            var skippedCount = skippedFiles.Count;
+
             var uploadedCount = 0;
-            foreach (var file in pendingFiles.Take(MaximumUploadsPerRun))
+            foreach (var file in filesToUpload.Take(MaximumUploadsPerRun))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Report("Uploading " + file.Name + "…");
-                await _graph.UploadAsync(destination.Id, file, null, true);
+                await _graph.UploadAsync(destination.Id, file, null, false, true);
                 await _state.MarkUploadedAsync(file.Path);
                 await _history.AddAsync(file.Name);
+                existingNames.Add(file.Name);
                 uploadedCount++;
             }
 
             _state.SaveLastResult("Uploaded " + uploadedCount + " new Camera Roll " +
                 (uploadedCount == 1 ? "item." : "items.") +
-                (pendingFiles.Count > uploadedCount
-                    ? " " + (pendingFiles.Count - uploadedCount) + " more new " +
-                      (pendingFiles.Count - uploadedCount == 1 ? "item remains." : "items remain.")
+                (skippedCount == 0 ? string.Empty : " Skipped " + skippedCount + " existing " +
+                    (skippedCount == 1 ? "file." : "files.")) +
+                (filesToUpload.Count - uploadedCount > 0
+                    ? " " + (filesToUpload.Count - uploadedCount) + " more new " +
+                      (filesToUpload.Count - uploadedCount == 1 ? "item remains." : "items remain.")
                     : string.Empty));
             return uploadedCount;
         }

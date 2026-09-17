@@ -34,6 +34,7 @@ namespace LiveDrive.Pages
                 ScheduledBackupToggle.IsOn = _services.CameraBackupScheduler.IsEnabled;
                 _isInitializingScheduledBackup = false;
                 ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                UpdateLastCameraRollScanStatus();
                 await LoadRecentlyUploadedAsync();
             };
         }
@@ -82,6 +83,14 @@ namespace LiveDrive.Pages
                 : "Scheduled Camera Roll backup is on. " + lastResult;
         }
 
+        private void UpdateLastCameraRollScanStatus()
+        {
+            var lastScanStarted = _services.CameraBackupState.GetLastScanStarted();
+            LastCameraRollScanStatus.Text = lastScanStarted.HasValue
+                ? "Last Camera Roll scan started: " + lastScanStarted.Value.ToLocalTime().ToString("g") + "."
+                : "Camera Roll has not been scanned yet.";
+        }
+
         private async void CheckCameraRollButton_Click(object sender, RoutedEventArgs e)
         {
             if (_isCheckingCameraRoll)
@@ -95,8 +104,10 @@ namespace LiveDrive.Pages
                 CheckCameraRollButton.IsEnabled = false;
                 ScheduledBackupStatus.Text = "Checking Camera Roll…";
                 var progress = new DelegateProgress<string>(status => ScheduledBackupStatus.Text = status);
-                var uploadedCount = await _services.CameraBackup.UploadNewCameraRollItemsAsync(
+                var scanTask = _services.CameraBackup.UploadNewCameraRollItemsAsync(
                     CancellationToken.None, progress);
+                UpdateLastCameraRollScanStatus();
+                var uploadedCount = await scanTask;
                 await LoadRecentlyUploadedAsync();
                 ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                 await PageFeedback.ShowInfoAsync(uploadedCount == 0
@@ -107,6 +118,7 @@ namespace LiveDrive.Pages
             catch (Exception exception)
             {
                 ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                UpdateLastCameraRollScanStatus();
                 await PageFeedback.ShowErrorAsync(exception);
             }
             finally
@@ -161,19 +173,37 @@ namespace LiveDrive.Pages
             try
             {
                 var destination = await _services.Graph.GetOrCreateRootFolderAsync("LiveDrive Camera Roll");
+                var existingNames = new HashSet<string>(
+                    (await _services.Graph.GetChildrenAsync(destination.Id))
+                        .Where(item => !item.IsFolder)
+                        .Select(item => item.Name),
+                    StringComparer.OrdinalIgnoreCase);
                 var totalFiles = _files.Count;
                 var completedFiles = 0;
+                var skippedFiles = 0;
                 while (_files.Count > 0)
                 {
                     var file = _files[0];
+                    if (existingNames.Contains(file.Name))
+                    {
+                        Queue[0].Status = "Already uploaded";
+                        await _services.CameraBackupState.MarkUploadedAsync(file.Path);
+                        _files.RemoveAt(0);
+                        Queue.RemoveAt(0);
+                        skippedFiles++;
+                        continue;
+                    }
+
                     Queue[0].Status = "Uploading";
                     UploadProgressText.Text = "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + file.Name;
                     var progress = new DelegateProgress<double>(value =>
                     {
                         UploadProgress.Value = (completedFiles + value) / totalFiles;
                     });
-                    await _services.Graph.UploadAsync(destination.Id, file, progress, true);
+                    await _services.Graph.UploadAsync(destination.Id, file, progress, false, true);
+                    await _services.CameraBackupState.MarkUploadedAsync(file.Path);
                     await _services.CameraUploadHistory.AddAsync(file.Name);
+                    existingNames.Add(file.Name);
                     RecentlyUploaded.Insert(0, new BackupItem { Name = file.Name, Status = "Uploaded" });
                     if (RecentlyUploaded.Count > 50)
                     {
@@ -185,7 +215,13 @@ namespace LiveDrive.Pages
                     UpdateRecentlyUploadedButton();
                 }
                 UploadProgress.Value = 1;
-                await PageFeedback.ShowInfoAsync("Queue uploaded to LiveDrive Camera Roll.");
+                await PageFeedback.ShowInfoAsync(completedFiles == 0
+                    ? "No new files were uploaded. Skipped " + skippedFiles + " existing " +
+                      (skippedFiles == 1 ? "file." : "files.")
+                    : "Uploaded " + completedFiles + " " + (completedFiles == 1 ? "file" : "files") +
+                      " to LiveDrive Camera Roll." +
+                      (skippedFiles == 0 ? string.Empty : " Skipped " + skippedFiles + " existing " +
+                          (skippedFiles == 1 ? "file." : "files.")));
             }
             catch (Exception exception)
             {

@@ -10,7 +10,11 @@ using Windows.Security.Authentication.Web;
 
 namespace LiveDrive.Services
 {
+#if BACKGROUND_TASK
+    internal sealed class OAuthService
+#else
     public sealed class OAuthService
+#endif
     {
         private readonly ITokenStore _tokenStore;
 

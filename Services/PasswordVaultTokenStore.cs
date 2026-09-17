@@ -5,7 +5,11 @@ using Windows.Security.Credentials;
 
 namespace LiveDrive.Services
 {
+#if BACKGROUND_TASK
+    internal sealed class PasswordVaultTokenStore : ITokenStore
+#else
     public sealed class PasswordVaultTokenStore : ITokenStore
+#endif
     {
         private const string Resource = "LiveDrive.Token";
         private const string User = "Default";

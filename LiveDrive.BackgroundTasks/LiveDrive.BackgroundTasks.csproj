@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">ARM</Platform>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">15.0</VisualStudioVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+    <ProjectGuid>{4F47E6C8-7B9F-4B7D-B441-ADB73FAE6D18}</ProjectGuid>
+    <OutputType>winmdobj</OutputType>
+    <RootNamespace>LiveDrive.BackgroundTasks</RootNamespace>
+    <AssemblyName>LiveDrive.BackgroundTasks</AssemblyName>
+    <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
+    <TargetPlatformVersion>10.0.15063.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
+    <TargetFrameworkIdentifier>.NETCore</TargetFrameworkIdentifier>
+    <TargetFrameworkVersion>v5.0</TargetFrameworkVersion>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
+    <EnableDotNetNativeCompatibleProfile>true</EnableDotNetNativeCompatibleProfile>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <OutputPath>bin\ARM\Debug\</OutputPath><DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;BACKGROUND_TASK</DefineConstants><DebugType>full</DebugType><PlatformTarget>ARM</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM' Or '$(Configuration)|$(Platform)'=='Store|ARM'">
+    <OutputPath>bin\ARM\$(Configuration)\</OutputPath><DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP;BACKGROUND_TASK</DefineConstants><Optimize>true</Optimize><DebugType>pdbonly</DebugType><PlatformTarget>ARM</PlatformTarget><UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutputPath>bin\x64\Debug\</OutputPath><DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;BACKGROUND_TASK</DefineConstants><DebugType>full</DebugType><PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64' Or '$(Configuration)|$(Platform)'=='Store|x64'">
+    <OutputPath>bin\x64\$(Configuration)\</OutputPath><DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP;BACKGROUND_TASK</DefineConstants><Optimize>true</Optimize><DebugType>pdbonly</DebugType><PlatformTarget>x64</PlatformTarget><UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="5.2.9" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CameraBackupBackgroundTask.cs" />
+    <Compile Include="..\Models\AuthToken.cs"><Link>Models\AuthToken.cs</Link></Compile>
+    <Compile Include="..\Models\DriveItem.cs"><Link>Models\DriveItem.cs</Link></Compile>
+    <Compile Include="..\Models\DriveItemPage.cs"><Link>Models\DriveItemPage.cs</Link></Compile>
+    <Compile Include="..\Models\OneDriveQuota.cs"><Link>Models\OneDriveQuota.cs</Link></Compile>
+    <Compile Include="..\Services\CameraBackupService.cs"><Link>Services\CameraBackupService.cs</Link></Compile>
+    <Compile Include="..\Services\CameraBackupStateStore.cs"><Link>Services\CameraBackupStateStore.cs</Link></Compile>
+    <Compile Include="..\Services\CameraUploadHistoryStore.cs"><Link>Services\CameraUploadHistoryStore.cs</Link></Compile>
+    <Compile Include="..\Services\ClientConfiguration.cs"><Link>Services\ClientConfiguration.cs</Link></Compile>
+    <Compile Include="..\Services\GraphClient.cs"><Link>Services\GraphClient.cs</Link></Compile>
+    <Compile Include="..\Services\IGraphClient.cs"><Link>Services\IGraphClient.cs</Link></Compile>
+    <Compile Include="..\Services\ITokenStore.cs"><Link>Services\ITokenStore.cs</Link></Compile>
+    <Compile Include="..\Services\OAuthService.cs"><Link>Services\OAuthService.cs</Link></Compile>
+    <Compile Include="..\Services\PasswordVaultTokenStore.cs"><Link>Services\PasswordVaultTokenStore.cs</Link></Compile>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+</Project>
