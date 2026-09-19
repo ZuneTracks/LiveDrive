@@ -19,7 +19,7 @@ namespace LiveDrive.Services
         private const string IndexFileName = "index.json";
         private const string PreviewFileName = "preview.json";
         private const int PreviewItemCount = 150;
-        private const ulong ThumbnailCacheLimit = 64 * 1024 * 1024;
+        private const ulong ThumbnailCacheLimit = 128 * 1024 * 1024;
         private PhotoIndexSnapshot _inMemorySnapshot;
         private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim _thumbnailFileLock = new SemaphoreSlim(1, 1);
@@ -197,7 +197,8 @@ namespace LiveDrive.Services
                 {
                     if (await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
                     {
-                        item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, preferLarge);
+                        await TrimThumbnailsCoreAsync();
+                        item.ThumbnailUrl = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
                     }
                     else
                     {
@@ -222,31 +223,7 @@ namespace LiveDrive.Services
             await _thumbnailFileLock.WaitAsync();
             try
             {
-                var files = await (await GetThumbnailsFolderAsync()).GetFilesAsync();
-                var sizedFiles = new List<Tuple<StorageFile, ulong, DateTimeOffset>>();
-                ulong totalSize = 0;
-                foreach (var file in files)
-                {
-                    var properties = await file.GetBasicPropertiesAsync();
-                    sizedFiles.Add(Tuple.Create(file, properties.Size, file.DateCreated));
-                    totalSize += properties.Size;
-                }
-
-                foreach (var file in sizedFiles.OrderBy(entry => entry.Item3))
-                {
-                    if (totalSize <= ThumbnailCacheLimit)
-                    {
-                        break;
-                    }
-                    try
-                    {
-                        await file.Item1.DeleteAsync();
-                        totalSize -= file.Item2;
-                    }
-                    catch (IOException)
-                    {
-                    }
-                }
+                await TrimThumbnailsCoreAsync();
             }
             finally
             {
@@ -329,12 +306,47 @@ namespace LiveDrive.Services
         {
             try
             {
-                await (await GetThumbnailsFolderAsync()).GetFileAsync(GetThumbnailFileName(itemId, preferLarge));
+                var file = await (await GetThumbnailsFolderAsync()).GetFileAsync(GetThumbnailFileName(itemId, preferLarge));
+                if ((await file.GetBasicPropertiesAsync()).Size == 0)
+                {
+                    await file.DeleteAsync();
+                    return string.Empty;
+                }
+
                 return GetLocalThumbnailUri(itemId, preferLarge);
             }
             catch (FileNotFoundException)
             {
                 return string.Empty;
+            }
+        }
+
+        private async Task TrimThumbnailsCoreAsync()
+        {
+            var files = await (await GetThumbnailsFolderAsync()).GetFilesAsync();
+            var sizedFiles = new List<Tuple<StorageFile, ulong, DateTimeOffset>>();
+            ulong totalSize = 0;
+            foreach (var file in files)
+            {
+                var properties = await file.GetBasicPropertiesAsync();
+                sizedFiles.Add(Tuple.Create(file, properties.Size, file.DateCreated));
+                totalSize += properties.Size;
+            }
+
+            foreach (var file in sizedFiles.OrderBy(entry => entry.Item3))
+            {
+                if (totalSize <= ThumbnailCacheLimit)
+                {
+                    break;
+                }
+                try
+                {
+                    await file.Item1.DeleteAsync();
+                    totalSize -= file.Item2;
+                }
+                catch (IOException)
+                {
+                }
             }
         }
 
