@@ -200,7 +200,20 @@ namespace LiveDrive.Pages
                     {
                         UploadProgress.Value = (completedFiles + value) / totalFiles;
                     });
-                    await _services.Graph.UploadAsync(destination.Id, file, progress, false, true);
+                    try
+                    {
+                        await _services.Graph.UploadAsync(destination.Id, file, progress, false, true);
+                    }
+                    catch (Exception exception) when (CameraBackupService.IsNameAlreadyExistsConflict(exception))
+                    {
+                        Queue[0].Status = "Already uploaded";
+                        await _services.CameraBackupState.MarkUploadedAsync(file.Path);
+                        existingNames.Add(file.Name);
+                        _files.RemoveAt(0);
+                        Queue.RemoveAt(0);
+                        skippedFiles++;
+                        continue;
+                    }
                     await _services.CameraBackupState.MarkUploadedAsync(file.Path);
                     await _services.CameraUploadHistory.AddAsync(file.Name);
                     existingNames.Add(file.Name);
@@ -215,13 +228,15 @@ namespace LiveDrive.Pages
                     UpdateRecentlyUploadedButton();
                 }
                 UploadProgress.Value = 1;
-                await PageFeedback.ShowInfoAsync(completedFiles == 0
+                var result = completedFiles == 0
                     ? "No new files were uploaded. Skipped " + skippedFiles + " existing " +
                       (skippedFiles == 1 ? "file." : "files.")
                     : "Uploaded " + completedFiles + " " + (completedFiles == 1 ? "file" : "files") +
                       " to LiveDrive Camera Roll." +
                       (skippedFiles == 0 ? string.Empty : " Skipped " + skippedFiles + " existing " +
-                          (skippedFiles == 1 ? "file." : "files.")));
+                          (skippedFiles == 1 ? "file." : "files."));
+                _services.CameraBackupState.SaveLastResult(result);
+                await PageFeedback.ShowInfoAsync(result);
             }
             catch (Exception exception)
             {

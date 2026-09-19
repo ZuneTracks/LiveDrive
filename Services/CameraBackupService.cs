@@ -84,11 +84,42 @@ namespace LiveDrive.Services
             var skippedCount = skippedFiles.Count;
 
             var uploadedCount = 0;
-            foreach (var file in filesToUpload.Take(MaximumUploadsPerRun))
+            var reconciledAfterUploadCount = 0;
+            var failedCount = 0;
+            string firstFailure = null;
+            var candidatesToUpload = filesToUpload.Take(MaximumUploadsPerRun).ToList();
+            var attemptedCount = 0;
+            foreach (var file in candidatesToUpload)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                attemptedCount++;
                 progress?.Report("Uploading " + file.Name + "…");
-                await _graph.UploadAsync(destination.Id, file, null, false, true);
+                try
+                {
+                    await _graph.UploadAsync(destination.Id, file, null, false, true);
+                }
+                catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
+                {
+                    await _state.MarkUploadedAsync(file.Path);
+                    existingNames.Add(file.Name);
+                    skippedCount++;
+                    reconciledAfterUploadCount++;
+                    continue;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    failedCount++;
+                    if (firstFailure == null)
+                    {
+                        firstFailure = FormatFailure(file.Name, exception);
+                    }
+                    progress?.Report("Could not upload " + file.Name + "; continuing.");
+                    continue;
+                }
                 await _state.MarkUploadedAsync(file.Path);
                 await _history.AddAsync(file.Name);
                 existingNames.Add(file.Name);
@@ -99,11 +130,35 @@ namespace LiveDrive.Services
                 (uploadedCount == 1 ? "item." : "items.") +
                 (skippedCount == 0 ? string.Empty : " Skipped " + skippedCount + " existing " +
                     (skippedCount == 1 ? "file." : "files.")) +
-                (filesToUpload.Count - uploadedCount > 0
-                    ? " " + (filesToUpload.Count - uploadedCount) + " more new " +
-                      (filesToUpload.Count - uploadedCount == 1 ? "item remains." : "items remain.")
+                (failedCount == 0 ? string.Empty : " Failed " + failedCount + " " +
+                    (failedCount == 1 ? "file." : "files.") + " First failure: " + firstFailure) +
+                " Attempted " + attemptedCount + " of " + filesToUpload.Count + " new " +
+                (filesToUpload.Count == 1 ? "item." : "items.") +
+                (filesToUpload.Count - uploadedCount - reconciledAfterUploadCount > 0
+                    ? " " + (filesToUpload.Count - uploadedCount - reconciledAfterUploadCount) + " more new " +
+                      (filesToUpload.Count - uploadedCount - reconciledAfterUploadCount == 1 ? "item remains." : "items remain.")
                     : string.Empty));
             return uploadedCount;
+        }
+
+        internal static bool IsNameAlreadyExistsConflict(Exception exception)
+        {
+            return exception is InvalidOperationException &&
+                exception.Message.IndexOf("(409)", StringComparison.Ordinal) >= 0 &&
+                exception.Message.IndexOf("nameAlreadyExists", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string FormatFailure(string fileName, Exception exception)
+        {
+            const int MaximumMessageLength = 160;
+            var message = exception.Message
+                .Replace("\r", " ")
+                .Replace("\n", " ");
+            if (message.Length > MaximumMessageLength)
+            {
+                message = message.Substring(0, MaximumMessageLength) + "…";
+            }
+            return fileName + ": " + message;
         }
 
         private static async Task<IReadOnlyList<StorageFile>> GetCameraRollFilesAsync(CancellationToken cancellationToken,
