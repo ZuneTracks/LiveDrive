@@ -34,8 +34,23 @@ namespace LiveDrive.Services
             var path = string.IsNullOrEmpty(folderId)
                 ? "/me/drive/root/children"
                 : "/me/drive/items/" + Uri.EscapeDataString(folderId) + "/children";
-            var json = await GetJsonAsync(path + "?$select=id,name,folder,file,size,createdDateTime,lastModifiedDateTime,parentReference,@microsoft.graph.downloadUrl&$orderby=name");
-            return ReadItems(json);
+            var nextLink = path +
+                "?$select=id,name,folder,file,size,createdDateTime,lastModifiedDateTime,parentReference,@microsoft.graph.downloadUrl&$orderby=name";
+            var items = new List<DriveItem>();
+            var itemIds = new HashSet<string>(StringComparer.Ordinal);
+            while (!string.IsNullOrEmpty(nextLink))
+            {
+                var json = await GetJsonAsync(nextLink);
+                foreach (var item in ReadItems(json))
+                {
+                    if (string.IsNullOrEmpty(item.Id) || itemIds.Add(item.Id))
+                    {
+                        items.Add(item);
+                    }
+                }
+                nextLink = json.GetNamedString("@odata.nextLink", string.Empty);
+            }
+            return items;
         }
 
         public async Task<DriveItem> GetOrCreateRootFolderAsync(string name)

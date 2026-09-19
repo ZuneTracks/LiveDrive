@@ -35,6 +35,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Fixed Camera Roll backup and folder listings missing files when a OneDrive folder
+  spans multiple Microsoft Graph result pages.
 - Increased the durable local thumbnail cache to 128 MB and prefer valid local medium
   and large thumbnail files over remote OneDrive URLs, with oldest cached files evicted
   first when the limit is exceeded.
