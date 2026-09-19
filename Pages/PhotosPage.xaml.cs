@@ -31,7 +31,6 @@ namespace LiveDrive.Pages
         private bool _isSelecting;
         private bool _isDeletingPhotos;
         private bool _thumbnailErrorShown;
-        private int _thumbnailCacheCount;
         private string _thumbnailSize;
         private string _photoSort;
         private List<DriveItem> _allPhotos = new List<DriveItem>();
@@ -550,9 +549,7 @@ namespace LiveDrive.Pages
 
             var preferLarge = _hasFullPhotoIndex && _thumbnailSize == "Large";
             var cacheKey = item.Id + (preferLarge ? "|large" : "|medium");
-            if ((!preferLarge && !string.IsNullOrEmpty(item.ThumbnailUrl)) ||
-                (preferLarge && IsLargeThumbnail(item.ThumbnailUrl)) ||
-                _unavailableThumbnailKeys.Contains(cacheKey) || !_queuedThumbnailKeys.Add(cacheKey))
+            if (_unavailableThumbnailKeys.Contains(cacheKey) || !_queuedThumbnailKeys.Add(cacheKey))
             {
                 return;
             }
@@ -567,10 +564,6 @@ namespace LiveDrive.Pages
                     if (string.IsNullOrEmpty(item.ThumbnailUrl))
                     {
                         _unavailableThumbnailKeys.Add(cacheKey);
-                    }
-                    if (Interlocked.Increment(ref _thumbnailCacheCount) % 12 == 0)
-                    {
-                        await _services.PhotoIndex.TrimThumbnailsAsync();
                     }
                 }
                 finally
@@ -593,12 +586,6 @@ namespace LiveDrive.Pages
             {
                 _queuedThumbnailKeys.Remove(cacheKey);
             }
-        }
-
-        private static bool IsLargeThumbnail(string thumbnailUrl)
-        {
-            return !string.IsNullOrEmpty(thumbnailUrl) &&
-                   thumbnailUrl.IndexOf(".large.jpg", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void PhotoTile_Holding(object sender, HoldingRoutedEventArgs e)

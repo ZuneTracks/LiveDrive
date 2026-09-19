@@ -35,6 +35,9 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Increased the durable local thumbnail cache to 128 MB and prefer valid local medium
+  and large thumbnail files over remote OneDrive URLs, with oldest cached files evicted
+  first when the limit is exceeded.
 - Fixed photo album membership persistence when adding newly discovered media.
 - Fixed album picker selection and Lumia theme rendering issues.
 - Fixed album counts that could include unavailable or stale item IDs.
