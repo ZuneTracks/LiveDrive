@@ -51,6 +51,8 @@ All notable user-facing changes are documented here.
 - Fixed a Mobile startup XAML parsing crash caused by an unsupported File info icon.
 - Fixed image-based Live Tiles to include Mobile-compatible medium and wide bindings
   without filename overlays.
+- Improved selected-photo and album Live Tile image quality by using cached large
+  thumbnails.
 - Limited SD-card Camera Roll discovery to likely camera-folder paths, preventing a
   manual check from traversing an entire removable drive.
 - Fixed Camera Roll backup history exceeding the Windows Phone application-settings

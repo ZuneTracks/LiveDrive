@@ -193,7 +193,7 @@ namespace LiveDrive.Services
 
         private async Task<string> GetTileImageAsync(DriveItem photo)
         {
-            await _photoIndex.CacheThumbnailAsync(photo, _graph, false, CancellationToken.None);
+            await _photoIndex.CacheThumbnailAsync(photo, _graph, true, CancellationToken.None);
             return photo.ThumbnailUrl;
         }
 
