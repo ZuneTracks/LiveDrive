@@ -2,6 +2,15 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+### Fixes
+
+- Fixed the background backup component being compiled against an older .NET
+  framework package than the main app, which produced a mixed runtime closure
+  inside a single Store package and could cause Store-side .NET Native
+  compilation to fail. Windows 10 Mobile compatibility is unchanged.
+
 ## 1.6.0 - 2026-09-17
 
 ### Features
