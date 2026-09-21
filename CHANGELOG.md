@@ -11,6 +11,11 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Fixed the app installing from the Store on Windows 10 Mobile but closing
+  immediately after the splash screen. The package required a Visual C++ runtime
+  version newer than Mobile devices can obtain, so the dependency was never
+  satisfied on the device. Store packages now require a version available on
+  Mobile. Desktop installs and sideloading were not affected.
 - Fixed a single problem file being able to stop an entire scheduled Camera Roll
   backup. Remaining files now continue to upload, while cancelling a backup still
   stops the run immediately.
