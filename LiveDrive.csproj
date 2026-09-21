@@ -223,7 +223,7 @@
     <None Include="LiveDrive_TemporaryKey.pfx" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-  <Target Name="RemoveFrameworkWinmdsFromPackaging" AfterTargets="_AddFxWinmd">
+  <Target Name="RemoveFrameworkWinmdsFromPackaging" AfterTargets="_AddFxWinmd" Condition="'$(Configuration)' != 'Store'">
     <ItemGroup>
       <PackagingOutputs Remove="@(UnionMetadataWinmd)" />
       <PackagingOutputs Remove="@(WinmdsFromFrameworkSDKs)" />
