@@ -10,6 +10,12 @@ All notable user-facing changes are documented here.
   framework package than the main app, which produced a mixed runtime closure
   inside a single Store package and could cause Store-side .NET Native
   compilation to fail. Windows 10 Mobile compatibility is unchanged.
+- Fixed Store submissions failing .NET Native compilation in the Store's cloud
+  compiler. The submitted package declared a Windows 10 Mobile minimum version
+  while also requesting a .NET Native runtime that only exists on newer Windows
+  releases, so the Store had no valid toolchain to build it with. The app now
+  targets a single consistent platform version, and Windows 10 Mobile support is
+  retained.
 
 ## 1.6.0 - 2026-09-17
 
