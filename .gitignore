@@ -2,5 +2,9 @@
 bin/
 obj/
 AppPackages/
+BundleArtifacts/
 *.csproj.user
 *.pfx
+
+# Store association is local until the app is associated with Partner Center.
+Package.StoreAssociation.xml
