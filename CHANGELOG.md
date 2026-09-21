@@ -2,6 +2,13 @@
 
 All notable user-facing changes are documented here.
 
+## 1.7.4.0 - 2026-09-21
+
+No user-facing changes. This release republishes the 1.7.3.0 application code and
+package configuration unchanged under a new version number. Every fix listed under
+1.7.3.0 below, including Windows 10 Mobile Store installation, is present in this
+release.
+
 ## 1.7.3.0 - 2026-09-21
 
 ### Features
