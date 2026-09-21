@@ -12,7 +12,7 @@
     <AssemblyName>LiveDrive</AssemblyName>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
     <TargetPlatformVersion>10.0.15063.0</TargetPlatformVersion>
-    <TargetPlatformMinVersion>10.0.16299.0</TargetPlatformMinVersion>
+    <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
     <TargetFrameworkIdentifier>.NETCore</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v5.0</TargetFrameworkVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
@@ -38,8 +38,6 @@
     <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
-    <AppxOSMinVersionReplaceManifestVersion>false</AppxOSMinVersionReplaceManifestVersion>
-    <AppxOSMaxVersionTestedReplaceManifestVersion>false</AppxOSMaxVersionTestedReplaceManifestVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <DebugSymbols>true</DebugSymbols>
@@ -225,50 +223,6 @@
     <None Include="LiveDrive_TemporaryKey.pfx" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-  <Target Name="BeforeDesignTimeMarkupCompilationCT" BeforeTargets="DesignTimeMarkupCompilationCT">
-    <PropertyGroup>
-      <OriginalTargetPlatformMinVersion>$(TargetPlatformMinVersion)</OriginalTargetPlatformMinVersion>
-      <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="AfterDesignTimeMarkupCompilationCT" AfterTargets="DesignTimeMarkupCompilationCT">
-    <PropertyGroup>
-      <TargetPlatformMinVersion>$(OriginalTargetPlatformMinVersion)</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="BeforeMarkupCompilePass1" BeforeTargets="MarkupCompilePass1">
-    <PropertyGroup>
-      <OriginalTargetPlatformMinVersion>$(TargetPlatformMinVersion)</OriginalTargetPlatformMinVersion>
-      <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="AfterMarkupCompilePass1" AfterTargets="MarkupCompilePass1">
-    <PropertyGroup>
-      <TargetPlatformMinVersion>$(OriginalTargetPlatformMinVersion)</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="BeforeMarkupCompilePass2" BeforeTargets="MarkupCompilePass2">
-    <PropertyGroup>
-      <OriginalTargetPlatformMinVersion>$(TargetPlatformMinVersion)</OriginalTargetPlatformMinVersion>
-      <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="AfterMarkupCompilePass2" AfterTargets="MarkupCompilePass2">
-    <PropertyGroup>
-      <TargetPlatformMinVersion>$(OriginalTargetPlatformMinVersion)</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="BeforeOnXamlPreCompileError" BeforeTargets="_OnXamlPreCompileError">
-    <PropertyGroup>
-      <OriginalTargetPlatformMinVersion>$(TargetPlatformMinVersion)</OriginalTargetPlatformMinVersion>
-      <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
-  <Target Name="AfterOnXamlPreCompileError" AfterTargets="_OnXamlPreCompileError">
-    <PropertyGroup>
-      <TargetPlatformMinVersion>$(OriginalTargetPlatformMinVersion)</TargetPlatformMinVersion>
-    </PropertyGroup>
-  </Target>
   <Target Name="RemoveFrameworkWinmdsFromPackaging" AfterTargets="_AddFxWinmd">
     <ItemGroup>
       <PackagingOutputs Remove="@(UnionMetadataWinmd)" />
