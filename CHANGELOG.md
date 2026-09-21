@@ -2,10 +2,18 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 1.7.3.0 - 2026-09-21
+
+### Features
+
+- Camera Roll backup results now report how many items were uploaded, skipped,
+  and failed, along with the reason for the first failure.
 
 ### Fixes
 
+- Fixed a single problem file being able to stop an entire scheduled Camera Roll
+  backup. Remaining files now continue to upload, while cancelling a backup still
+  stops the run immediately.
 - Fixed the background backup component being compiled against an older .NET
   framework package than the main app, which produced a mixed runtime closure
   inside a single Store package and could cause Store-side .NET Native
