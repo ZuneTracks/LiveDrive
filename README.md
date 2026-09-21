@@ -43,6 +43,6 @@ Open `LiveDrive.csproj` in Visual Studio with the Windows 10 SDK (10.0.15063.0 o
 
 1. Start from a clean, committed source tree. Set `Package.appxmanifest`'s package version to match the intended release tag, commit the change, and create an annotated tag from that exact commit.
 2. From that clean tag, produce signed ARM and x64 Store/upload package artifacts. Both Release artifacts must retain .NET Native. Do not reuse packages from another commit or architecture.
-3. Inspect each outer package, its inner architecture package, and their package maps before publishing. SDK `Windows.winmd` and SDK `*Contract.winmd` files must be absent; app-owned runtime-component WinMDs must remain.
+3. Inspect each outer package, its inner architecture package, and their package maps before publishing. For sideload (`Release`) packages, SDK `Windows.winmd` and SDK `*Contract.winmd` files must be absent. For `Store` packages destined for Partner Center, SDK `WinMetadata\Windows.winmd` **must be present** — the Store recompiles the uploaded MSIL with .NET Native in the cloud and cannot resolve Windows Runtime types without it. App-owned runtime-component WinMDs must remain in both cases.
 4. Attach the signed packages to the GitHub release along with certificate and dependency installation directions appropriate to the signing setup.
 5. Publish the GitHub release from the same verified tag. Do not move the tag or alter historic releases after publication.

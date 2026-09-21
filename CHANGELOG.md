@@ -16,6 +16,10 @@ All notable user-facing changes are documented here.
   releases, so the Store had no valid toolchain to build it with. The app now
   targets a single consistent platform version, and Windows 10 Mobile support is
   retained.
+- Fixed Store submissions still failing .NET Native compilation because the
+  uploaded package omitted the Windows Runtime metadata file that the Store's
+  cloud compiler needs to rebuild the app. It is now included in Store packages,
+  while sideload packages continue to exclude it.
 
 ## 1.6.0 - 2026-09-17
 
