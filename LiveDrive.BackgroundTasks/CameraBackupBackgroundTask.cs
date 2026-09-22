@@ -39,7 +39,7 @@ namespace LiveDrive.BackgroundTasks
             }
             try
             {
-                var uploadedCount = await backup.UploadNextPendingCameraRollItemAsync(cancellation.Token);
+                var uploadedCount = await backup.UploadPendingCameraRollItemsAsync(cancellation.Token);
                 if (uploadedCount > 0)
                 {
                     SubmitCompletionToast(state, uploadedCount);
