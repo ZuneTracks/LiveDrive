@@ -16,11 +16,19 @@ namespace LiveDrive.BackgroundTasks
         {
             var deferral = taskInstance.GetDeferral();
             var cancellation = new CancellationTokenSource();
-            taskInstance.Canceled += (sender, reason) => cancellation.Cancel();
-            _ = RunAsync(cancellation, deferral);
+            BackgroundTaskCancellationReason? cancellationReason = null;
+            taskInstance.Canceled += (sender, reason) =>
+            {
+                cancellationReason = reason;
+                cancellation.Cancel();
+            };
+            _ = RunAsync(cancellation, deferral, () => cancellationReason);
         }
 
-        private static async Task RunAsync(CancellationTokenSource cancellation, BackgroundTaskDeferral deferral)
+        private static async Task RunAsync(
+            CancellationTokenSource cancellation,
+            BackgroundTaskDeferral deferral,
+            Func<BackgroundTaskCancellationReason?> getCancellationReason)
         {
             var state = new CameraBackupStateStore();
             var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
@@ -30,6 +38,9 @@ namespace LiveDrive.BackgroundTasks
                 var uploadedCount = await backup.UploadNewCameraRollItemsAsync(cancellation.Token);
                 if (uploadedCount > 0)
                 {
+                    SubmitCompletionToast(state, uploadedCount);
+                    cancellation.Token.ThrowIfCancellationRequested();
+
                     try
                     {
                         await UpdateRelevantLiveTileAsync(graph);
@@ -39,30 +50,14 @@ namespace LiveDrive.BackgroundTasks
                         state.SaveLastResult(
                             "Camera Roll upload completed, but Live Tile update failed: " + exception.Message);
                     }
-
-                    try
-                    {
-                        var notifier = ToastNotificationManager.CreateToastNotifier();
-                        var toastXml = new XmlDocument();
-                        toastXml.LoadXml("<toast><visual><binding template=\"ToastGeneric\"><text>LiveDrive</text><text>Uploaded " +
-                            uploadedCount + " new Camera Roll " + (uploadedCount == 1 ? "item." : "items.") +
-                            "</text></binding></visual></toast>");
-                        notifier.Show(new ToastNotification(toastXml));
-                        state.SaveToastDiagnostic(
-                            "Scheduled upload toast submitted at " + DateTimeOffset.Now.ToString("g") +
-                            ". Device setting: " + notifier.Setting + ".");
-                    }
-                    catch (Exception exception)
-                    {
-                        state.SaveToastDiagnostic(
-                            "Scheduled upload toast failed at " + DateTimeOffset.Now.ToString("g") + ". " +
-                            exception.Message);
-                    }
                 }
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
-                state.SaveLastResult("Scheduled Camera Roll backup was canceled.");
+                var reason = getCancellationReason();
+                state.SaveLastResult(
+                    "Scheduled Camera Roll backup was canceled (" +
+                    (reason.HasValue ? reason.Value.ToString() : "unknown reason") + ").");
             }
             catch (Exception exception)
             {
@@ -75,6 +70,31 @@ namespace LiveDrive.BackgroundTasks
             {
                 cancellation.Dispose();
                 deferral.Complete();
+            }
+        }
+
+        private static void SubmitCompletionToast(CameraBackupStateStore state, int uploadedCount)
+        {
+            var notifier = ToastNotificationManager.CreateToastNotifier();
+            try
+            {
+                state.SaveToastDiagnostic(
+                    "Scheduled upload completed at " + DateTimeOffset.Now.ToString("g") +
+                    "; submitting toast. Device setting: " + notifier.Setting + ".");
+                var toastXml = new XmlDocument();
+                toastXml.LoadXml("<toast><visual><binding template=\"ToastGeneric\"><text>LiveDrive</text><text>Uploaded " +
+                    uploadedCount + " new Camera Roll " + (uploadedCount == 1 ? "item." : "items.") +
+                    "</text></binding></visual></toast>");
+                notifier.Show(new ToastNotification(toastXml));
+                state.SaveToastDiagnostic(
+                    "Scheduled upload toast submitted at " + DateTimeOffset.Now.ToString("g") +
+                    ". Device setting: " + notifier.Setting + ".");
+            }
+            catch (Exception exception)
+            {
+                state.SaveToastDiagnostic(
+                    "Scheduled upload toast failed at " + DateTimeOffset.Now.ToString("g") + ". " +
+                    exception.Message);
             }
         }
 
