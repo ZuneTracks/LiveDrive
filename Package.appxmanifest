@@ -29,6 +29,7 @@
         <Extension Category="windows.backgroundTasks"
                    EntryPoint="LiveDrive.BackgroundTasks.CameraBackupBackgroundTask">
           <BackgroundTasks>
+            <Task Type="general" />
             <Task Type="timer" />
           </BackgroundTasks>
         </Extension>
