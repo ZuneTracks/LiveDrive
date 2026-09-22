@@ -4,10 +4,15 @@ All notable user-facing changes are documented here.
 
 ## 1.7.4.0 - 2026-09-21
 
-No user-facing changes. This release republishes the 1.7.3.0 application code and
-package configuration unchanged under a new version number. Every fix listed under
-1.7.3.0 below, including Windows 10 Mobile Store installation, is present in this
-release.
+### Fixes
+
+- Scheduled Camera Roll backups now submit their completion notification immediately
+  after uploads finish, before the optional Live Tile refresh. A slow Tile refresh can
+  no longer prevent the notification from reaching constrained Windows 10 Mobile
+  background tasks.
+- The scheduled-backup status now records the Windows cancellation reason when it is
+  available, and the notification diagnostic records when upload completion is reached
+  before a toast is submitted.
 
 ## 1.7.3.0 - 2026-09-21
 
