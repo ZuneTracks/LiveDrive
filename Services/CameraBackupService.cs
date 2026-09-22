@@ -20,7 +20,7 @@ namespace LiveDrive.Services
             ".jpg", ".jpeg", ".png", ".mp4", ".mov"
         };
         private const int MaximumUploadsPerRun = 10;
-        private const int MaximumUploadsPerBackgroundRun = 2;
+        private const int MaximumUploadsPerBackgroundRun = 5;
         private const uint RecentFilesPerBackgroundRun = 12;
 
         private readonly IGraphClient _graph;
