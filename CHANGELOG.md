@@ -2,6 +2,17 @@
 
 All notable user-facing changes are documented here.
 
+## 1.7.5.0 - 2026-09-22
+
+### Fixes
+
+- Made scheduled Camera Roll backup reliable on Windows 10 Mobile by using a durable
+  background queue, cancellation-aware uploads, and short bounded upload batches.
+- Scheduled backup now uploads up to five queued Camera Roll items per background run
+  and resumes remaining items on the next eligible run.
+- Enabling Camera Roll backup now requests an immediate background check that can
+  continue after the app is minimized or closed.
+
 ## 1.7.4.0 - 2026-09-21
 
 ### Fixes
