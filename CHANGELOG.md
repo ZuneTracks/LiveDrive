@@ -6,6 +6,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Enabling scheduled Camera Roll backup now starts one immediate foreground check
+  before Windows takes over the best-effort 15-minute schedule.
 - Scheduled Camera Roll backups now submit their completion notification immediately
   after uploads finish, before the optional Live Tile refresh. A slow Tile refresh can
   no longer prevent the notification from reaching constrained Windows 10 Mobile

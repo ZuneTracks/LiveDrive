@@ -51,6 +51,7 @@ namespace LiveDrive.Pages
                 if (ScheduledBackupToggle.IsOn)
                 {
                     await _services.CameraBackupScheduler.EnableAsync();
+                    await CheckCameraRollAsync();
                 }
                 else
                 {
@@ -93,6 +94,11 @@ namespace LiveDrive.Pages
 
         private async void CheckCameraRollButton_Click(object sender, RoutedEventArgs e)
         {
+            await CheckCameraRollAsync();
+        }
+
+        private async Task CheckCameraRollAsync()
+        {
             if (_isCheckingCameraRoll)
             {
                 return;
@@ -102,6 +108,7 @@ namespace LiveDrive.Pages
             {
                 _isCheckingCameraRoll = true;
                 CheckCameraRollButton.IsEnabled = false;
+                ScheduledBackupToggle.IsEnabled = false;
                 ScheduledBackupStatus.Text = "Checking Camera Roll…";
                 var progress = new DelegateProgress<string>(status => ScheduledBackupStatus.Text = status);
                 var scanTask = _services.CameraBackup.UploadNewCameraRollItemsAsync(
@@ -125,6 +132,7 @@ namespace LiveDrive.Pages
             {
                 _isCheckingCameraRoll = false;
                 CheckCameraRollButton.IsEnabled = true;
+                ScheduledBackupToggle.IsEnabled = true;
             }
         }
 
