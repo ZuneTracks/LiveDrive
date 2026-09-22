@@ -53,24 +53,44 @@ namespace LiveDrive.Services
             return items;
         }
 
-        public async Task<DriveItem> GetOrCreateRootFolderAsync(string name)
+        public async Task<DriveItem> GetOrCreateRootFolderAsync(
+            string name, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var existing = (await GetChildrenAsync(null)).FirstOrDefault(item =>
-                item.IsFolder && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
+            var itemPath = "/me/drive/root:/" + Uri.EscapeDataString(name) + "?$select=id,name,folder";
+            using (var request = new HttpRequestMessage(HttpMethod.Get, itemPath))
+            using (var response = await SendAsync(
+                request, HttpCompletionOption.ResponseContentRead, true, cancellationToken))
             {
-                return existing;
+                if (response.StatusCode != HttpStatusCode.NotFound)
+                {
+                    var existing = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+                    if (existing.GetNamedObject("folder", null) == null)
+                    {
+                        throw new InvalidOperationException("A file named " + name + " already exists in OneDrive.");
+                    }
+                    return new DriveItem
+                    {
+                        Id = existing.GetNamedString("id"),
+                        Name = existing.GetNamedString("name", name),
+                        IsFolder = true
+                    };
+                }
             }
 
             var payload = new JsonObject();
             payload.SetNamedValue("name", JsonValue.CreateStringValue(name));
             payload.SetNamedValue("folder", new JsonObject());
             payload.SetNamedValue("@microsoft.graph.conflictBehavior", JsonValue.CreateStringValue("fail"));
-            var request = new HttpRequestMessage(HttpMethod.Post, "/me/drive/root/children")
+            var createRequest = new HttpRequestMessage(HttpMethod.Post, "/me/drive/root/children")
             {
                 Content = new StringContent(payload.Stringify(), Encoding.UTF8, "application/json")
             };
-            var created = await SendJsonAsync(request);
+            JsonObject created;
+            using (var response = await SendAsync(
+                createRequest, HttpCompletionOption.ResponseContentRead, false, cancellationToken))
+            {
+                created = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+            }
             return new DriveItem
             {
                 Id = created.GetNamedString("id"),
@@ -220,13 +240,16 @@ namespace LiveDrive.Services
         }
 
         public async Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null,
-            bool renameOnConflict = false, bool failOnConflict = false)
+            bool renameOnConflict = false, bool failOnConflict = false,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(0);
             var properties = await file.GetBasicPropertiesAsync();
             if (properties.Size > 4 * 1024 * 1024)
             {
-                await UploadLargeFileAsync(parentId, file, properties.Size, progress, renameOnConflict, failOnConflict);
+                await UploadLargeFileAsync(
+                    parentId, file, properties.Size, progress, renameOnConflict, failOnConflict, cancellationToken);
                 return;
             }
 
@@ -243,7 +266,8 @@ namespace LiveDrive.Services
             })
             {
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType ?? "application/octet-stream");
-                using (var response = await SendAsync(request))
+                using (var response = await SendAsync(
+                    request, HttpCompletionOption.ResponseContentRead, false, cancellationToken))
                 {
                 }
             }
@@ -292,7 +316,7 @@ namespace LiveDrive.Services
         }
 
         private async Task UploadLargeFileAsync(string parentId, StorageFile file, ulong size, IProgress<double> progress,
-            bool renameOnConflict, bool failOnConflict)
+            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken)
         {
             var target = string.IsNullOrEmpty(parentId)
                 ? "/me/drive/root:/" + Uri.EscapeDataString(file.Name) + ":/createUploadSession"
@@ -305,7 +329,12 @@ namespace LiveDrive.Services
                     Encoding.UTF8,
                     "application/json")
             };
-            var session = await SendJsonAsync(sessionRequest);
+            JsonObject session;
+            using (var response = await SendAsync(
+                sessionRequest, HttpCompletionOption.ResponseContentRead, false, cancellationToken))
+            {
+                session = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+            }
             var uploadUrl = session.GetNamedString("uploadUrl", string.Empty);
             if (string.IsNullOrEmpty(uploadUrl))
             {
@@ -320,11 +349,12 @@ namespace LiveDrive.Services
                 int read;
                 while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     using (var content = new ByteArrayContent(buffer, 0, read))
                     using (var request = new HttpRequestMessage(HttpMethod.Put, uploadUrl) { Content = content })
                     {
                         content.Headers.Add("Content-Range", "bytes " + offset + "-" + (offset + read - 1) + "/" + size);
-                        var response = await _http.SendAsync(request);
+                        var response = await _http.SendAsync(request, cancellationToken);
                         if (!response.IsSuccessStatusCode && (int)response.StatusCode != 202)
                         {
                             var error = await response.Content.ReadAsStringAsync();

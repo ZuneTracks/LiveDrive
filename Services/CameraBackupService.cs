@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
+using Windows.Storage.Search;
 
 namespace LiveDrive.Services
 {
@@ -19,6 +20,7 @@ namespace LiveDrive.Services
             ".jpg", ".jpeg", ".png", ".mp4", ".mov"
         };
         private const int MaximumUploadsPerRun = 10;
+        private const uint RecentFilesPerBackgroundRun = 12;
 
         private readonly IGraphClient _graph;
         private readonly CameraUploadHistoryStore _history;
@@ -55,7 +57,8 @@ namespace LiveDrive.Services
                 return 0;
             }
 
-            var destination = await _graph.GetOrCreateRootFolderAsync("LiveDrive Camera Roll");
+            var destination = await _graph.GetOrCreateRootFolderAsync(
+                "LiveDrive Camera Roll", cancellationToken);
             var existingNames = new HashSet<string>(
                 (await _graph.GetChildrenAsync(destination.Id))
                     .Where(item => !item.IsFolder)
@@ -139,6 +142,94 @@ namespace LiveDrive.Services
                       (filesToUpload.Count - uploadedCount - reconciledAfterUploadCount == 1 ? "item remains." : "items remain.")
                     : string.Empty));
             return uploadedCount;
+        }
+
+        public async Task<int> UploadNextPendingCameraRollItemAsync(CancellationToken cancellationToken)
+        {
+            _state.SaveLastScanStarted(DateTimeOffset.Now);
+            var pendingPaths = (await _state.LoadPendingPathsAsync()).ToList();
+            await QueueRecentCameraRollFilesAsync(pendingPaths, cancellationToken);
+            if (pendingPaths.Count == 0)
+            {
+                _state.SaveLastResult("No new recent Camera Roll items are waiting to upload.");
+                return 0;
+            }
+
+            var path = pendingPaths[0];
+            StorageFile file;
+            try
+            {
+                file = await StorageFile.GetFileFromPathAsync(path);
+            }
+            catch (FileNotFoundException)
+            {
+                pendingPaths.RemoveAt(0);
+                await _state.SavePendingPathsAsync(pendingPaths);
+                _state.SaveLastResult("A queued Camera Roll item was no longer available; it will be skipped.");
+                return 0;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                pendingPaths.RemoveAt(0);
+                await _state.SavePendingPathsAsync(pendingPaths);
+                _state.SaveLastResult("A queued Camera Roll item could no longer be accessed; it will be skipped.");
+                return 0;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var destinationFolderId = _state.GetDestinationFolderId();
+            if (string.IsNullOrEmpty(destinationFolderId))
+            {
+                var destination = await _graph.GetOrCreateRootFolderAsync("LiveDrive Camera Roll");
+                destinationFolderId = destination.Id;
+                _state.SaveDestinationFolderId(destinationFolderId);
+            }
+
+            try
+            {
+                await _graph.UploadAsync(destinationFolderId, file, null, false, true, cancellationToken);
+            }
+            catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
+            {
+                await _state.MarkUploadedAsync(file.Path);
+                pendingPaths.RemoveAt(0);
+                await _state.SavePendingPathsAsync(pendingPaths);
+                _state.SaveLastResult(
+                    "Skipped existing Camera Roll item " + file.Name + ". " +
+                    pendingPaths.Count + " queued item" + (pendingPaths.Count == 1 ? " remains." : "s remain."));
+                return 0;
+            }
+
+            await _state.MarkUploadedAsync(file.Path);
+            await _history.AddAsync(file.Name);
+            pendingPaths.RemoveAt(0);
+            await _state.SavePendingPathsAsync(pendingPaths);
+            _state.SaveLastResult(
+                "Uploaded 1 Camera Roll item. " +
+                pendingPaths.Count + " queued item" + (pendingPaths.Count == 1 ? " remains." : "s remain."));
+            return 1;
+        }
+
+        private async Task QueueRecentCameraRollFilesAsync(
+            List<string> pendingPaths, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var uploadedPaths = new HashSet<string>(
+                await _state.LoadUploadedPathsAsync(), StringComparer.OrdinalIgnoreCase);
+            var queuedPaths = new HashSet<string>(pendingPaths, StringComparer.OrdinalIgnoreCase);
+            var query = KnownFolders.CameraRoll.CreateFileQuery(CommonFileQuery.OrderByDate);
+            var recentFiles = await query.GetFilesAsync(0, RecentFilesPerBackgroundRun);
+            foreach (var file in recentFiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (SupportedExtensions.Contains(Path.GetExtension(file.Name)) &&
+                    !uploadedPaths.Contains(file.Path) &&
+                    queuedPaths.Add(file.Path))
+                {
+                    pendingPaths.Add(file.Path);
+                }
+            }
+            await _state.SavePendingPathsAsync(pendingPaths);
         }
 
         internal static bool IsNameAlreadyExistsConflict(Exception exception)
