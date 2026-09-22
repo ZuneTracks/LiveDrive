@@ -50,14 +50,18 @@ namespace LiveDrive.Pages
             {
                 if (ScheduledBackupToggle.IsOn)
                 {
-                    await _services.CameraBackupScheduler.EnableAsync();
-                    await CheckCameraRollAsync();
+                    var initialRun = await _services.CameraBackupScheduler.EnableAsync();
+                    ScheduledBackupStatus.Text =
+                        initialRun == Windows.ApplicationModel.Background.ApplicationTriggerResult.Allowed
+                            ? "Scheduled Camera Roll backup is on. Windows accepted the initial background check."
+                            : "Scheduled Camera Roll backup is on. Windows did not start the initial background check (" +
+                              initialRun + "); it will run when resources allow.";
                 }
                 else
                 {
                     _services.CameraBackupScheduler.Disable();
+                    ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                 }
-                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
             }
             catch (Exception exception)
             {

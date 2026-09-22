@@ -8,12 +8,13 @@ namespace LiveDrive.Services
     public sealed class CameraBackupScheduler
     {
         public const string TaskName = "LiveDriveCameraBackup";
+        private const string InitialTaskName = "LiveDriveCameraBackupInitial";
         public const string TaskEntryPoint = "LiveDrive.BackgroundTasks.CameraBackupBackgroundTask";
         private const uint IntervalMinutes = 15;
 
         public bool IsEnabled => BackgroundTaskRegistration.AllTasks.Values.Any(task => task.Name == TaskName);
 
-        public async Task EnableAsync()
+        public async Task<ApplicationTriggerResult> EnableAsync()
         {
             var access = await BackgroundExecutionManager.RequestAccessAsync();
             if (access != BackgroundAccessStatus.AlwaysAllowed &&
@@ -22,21 +23,36 @@ namespace LiveDrive.Services
                 throw new InvalidOperationException("Windows did not allow scheduled camera backup.");
             }
 
-            Disable();
+            UnregisterTasks(true);
+            RegisterTask(TaskName, new TimeTrigger(IntervalMinutes, false));
+
+            var initialTrigger = new ApplicationTrigger();
+            RegisterTask(InitialTaskName, initialTrigger);
+            return await initialTrigger.RequestAsync();
+        }
+
+        private static void RegisterTask(string name, IBackgroundTrigger trigger)
+        {
             var builder = new BackgroundTaskBuilder
             {
-                Name = TaskName,
+                Name = name,
                 TaskEntryPoint = TaskEntryPoint
             };
-            builder.SetTrigger(new TimeTrigger(IntervalMinutes, false));
+            builder.SetTrigger(trigger);
             builder.Register();
         }
 
         public void Disable()
         {
-            foreach (var task in BackgroundTaskRegistration.AllTasks.Values.Where(task => task.Name == TaskName))
+            UnregisterTasks(false);
+        }
+
+        private static void UnregisterTasks(bool cancelRunning)
+        {
+            foreach (var task in BackgroundTaskRegistration.AllTasks.Values.Where(task =>
+                task.Name == TaskName || task.Name == InitialTaskName))
             {
-                task.Unregister(false);
+                task.Unregister(cancelRunning);
             }
         }
     }
