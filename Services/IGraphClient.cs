@@ -14,7 +14,8 @@ namespace LiveDrive.Services
 #endif
     {
         Task<IReadOnlyList<DriveItem>> GetChildrenAsync(string folderId);
-        Task<DriveItem> GetOrCreateRootFolderAsync(string name);
+        Task<DriveItem> GetOrCreateRootFolderAsync(
+            string name, CancellationToken cancellationToken = default(CancellationToken));
         Task<DriveItem> GetRootFolderAsync();
         Task<OneDriveQuota> GetQuotaAsync();
         Task<IReadOnlyList<DriveItem>> GetRecentAsync();
@@ -25,7 +26,8 @@ namespace LiveDrive.Services
         Task WriteAppFolderFileAsync(string fileName, string content);
         Task<IReadOnlyList<DriveItem>> SearchAsync(string query);
         Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null,
-            bool renameOnConflict = false, bool failOnConflict = false);
+            bool renameOnConflict = false, bool failOnConflict = false,
+            CancellationToken cancellationToken = default(CancellationToken));
         Task CopyAsync(DriveItem item, string destinationFolderId);
         Task MoveAsync(DriveItem item, string destinationFolderId);
         Task DeleteAsync(DriveItem item);

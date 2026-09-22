@@ -6,6 +6,13 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Background Camera Roll backup now persists a small queue of recent files and uploads
+  one item per run, instead of rescanning the entire library and listing the full
+  OneDrive destination before every upload. Runs can now make durable progress within
+  Windows 10 Mobile's short background execution budget.
+- Background uploads now cancel in-flight Graph requests when Windows ends the task,
+  skip optional Live Tile refresh work, and prevent overlapping timer and requested
+  runs from modifying the pending queue at the same time.
 - Enabling scheduled Camera Roll backup now requests an immediate background check,
   so the first backup can continue after LiveDrive is minimized or closed instead of
   requiring the app to remain open.
