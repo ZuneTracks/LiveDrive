@@ -218,6 +218,32 @@ namespace LiveDrive.Services
             }
         }
 
+        public async Task RestoreCachedThumbnailUrisAsync(
+            IEnumerable<DriveItem> items, bool preferLarge, CancellationToken cancellationToken)
+        {
+            await _thumbnailFileLock.WaitAsync(cancellationToken);
+            try
+            {
+                foreach (var item in items)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var uri = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
+                    if (string.IsNullOrEmpty(uri) && preferLarge)
+                    {
+                        uri = await GetLocalThumbnailUriAsync(item.Id, false);
+                    }
+                    if (!string.IsNullOrEmpty(uri))
+                    {
+                        item.ThumbnailUrl = uri;
+                    }
+                }
+            }
+            finally
+            {
+                _thumbnailFileLock.Release();
+            }
+        }
+
         public async Task TrimThumbnailsAsync()
         {
             await _thumbnailFileLock.WaitAsync();
