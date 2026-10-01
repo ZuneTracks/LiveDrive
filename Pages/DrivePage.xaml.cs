@@ -40,7 +40,7 @@ namespace LiveDrive.Pages
             try
             {
                 var items = await _services.Graph.GetChildrenAsync(_currentFolderId);
-                ItemsList.SelectedItems.Clear();
+                ClearDriveSelection();
                 _items.Clear();
                 foreach (var item in items
                     .OrderByDescending(item => item.IsFolder)
@@ -96,7 +96,7 @@ namespace LiveDrive.Pages
         {
             if (ItemsList.SelectedItems.Count == _items.Count)
             {
-                ItemsList.SelectedItems.Clear();
+                ClearDriveSelection();
             }
             else
             {
@@ -108,7 +108,7 @@ namespace LiveDrive.Pages
         private void SelectionButton_Click(object sender, RoutedEventArgs e)
         {
             _isSelecting = !_isSelecting;
-            ItemsList.SelectedItems.Clear();
+            ClearDriveSelection();
             ItemsList.SelectionMode = _isSelecting
                 ? ListViewSelectionMode.Multiple
                 : ListViewSelectionMode.None;
@@ -207,7 +207,7 @@ namespace LiveDrive.Pages
             }
 
             _services.Clipboard.Store(selectedItems, _currentFolderId, operation);
-            ItemsList.SelectedItems.Clear();
+            ClearDriveSelection();
             UpdateCommandState();
             try
             {
@@ -458,6 +458,15 @@ namespace LiveDrive.Pages
         private List<DriveItem> GetSelectedItems()
         {
             return ItemsList.SelectedItems.Cast<DriveItem>().ToList();
+        }
+
+        private void ClearDriveSelection()
+        {
+            if (ItemsList.SelectionMode != ListViewSelectionMode.None &&
+                ItemsList.SelectedItems.Count > 0)
+            {
+                ItemsList.SelectedItems.Clear();
+            }
         }
 
         private void UpdateCommandState()
