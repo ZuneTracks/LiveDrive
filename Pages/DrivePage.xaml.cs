@@ -20,7 +20,8 @@ namespace LiveDrive.Pages
         private readonly AppServices _services;
         private readonly ObservableCollection<DriveItem> _items = new ObservableCollection<DriveItem>();
         private string _currentFolderId;
-        private readonly System.Collections.Generic.Stack<string> _history = new System.Collections.Generic.Stack<string>();
+        private string _currentFolderName = "My drive";
+        private readonly Stack<FolderLocation> _history = new Stack<FolderLocation>();
 
         public DrivePage()
         {
@@ -40,10 +41,13 @@ namespace LiveDrive.Pages
                 var items = await _services.Graph.GetChildrenAsync(_currentFolderId);
                 ItemsList.SelectedItems.Clear();
                 _items.Clear();
-                foreach (var item in items)
+                foreach (var item in items
+                    .OrderByDescending(item => item.IsFolder)
+                    .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     _items.Add(item);
                 }
+                UpdateBreadcrumb();
                 UpdateCommandState();
                 EmptyPanel.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
@@ -61,7 +65,9 @@ namespace LiveDrive.Pages
         {
             if (_history.Count > 0)
             {
-                _currentFolderId = _history.Pop();
+                var location = _history.Pop();
+                _currentFolderId = location.Id;
+                _currentFolderName = location.Name;
                 await LoadFolderAsync();
             }
         }
@@ -74,6 +80,15 @@ namespace LiveDrive.Pages
         private void ItemsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             UpdateCommandState();
+        }
+
+        private async void ItemsList_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            var item = e.ClickedItem as DriveItem;
+            if (item != null)
+            {
+                await ViewItemAsync(item);
+            }
         }
 
         private void SelectAllButton_Click(object sender, RoutedEventArgs e)
@@ -104,8 +119,9 @@ namespace LiveDrive.Pages
         {
             if (item.IsFolder)
             {
-                _history.Push(_currentFolderId);
+                _history.Push(new FolderLocation(_currentFolderId, _currentFolderName));
                 _currentFolderId = item.Id;
+                _currentFolderName = item.Name;
                 await LoadFolderAsync();
                 return;
             }
@@ -124,7 +140,7 @@ namespace LiveDrive.Pages
             }
 
             var menu = new MenuFlyout();
-            var view = new MenuFlyoutItem { Text = "View" };
+            var view = new MenuFlyoutItem { Text = item.IsFolder ? "Open folder" : "View" };
             view.Click += async (menuSender, menuArgs) => await ViewItemAsync(item);
             var fileInfo = new MenuFlyoutItem { Text = "File info" };
             fileInfo.Click += async (menuSender, menuArgs) => await FileInfoDialog.ShowAsync(item);
@@ -289,15 +305,6 @@ namespace LiveDrive.Pages
         {
             try
             {
-                var destination = await PickDestinationFolderAsync(
-                    "Choose upload folder",
-                    "Open folders to choose where this file will be uploaded.",
-                    "Use this folder");
-                if (destination == null)
-                {
-                    return;
-                }
-
                 var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
                 picker.FileTypeFilter.Add("*");
                 var file = await picker.PickSingleFileAsync();
@@ -310,10 +317,15 @@ namespace LiveDrive.Pages
                 UploadProgressText.Text = "Uploading " + file.Name + "…";
                 UploadProgressPanel.Visibility = Visibility.Visible;
                 var progress = new DelegateProgress<double>(value => UploadProgress.Value = value);
-                await _services.Graph.UploadAsync(destination.Id, file, progress);
+                var destinationId = _currentFolderId;
+                if (string.IsNullOrEmpty(destinationId))
+                {
+                    destinationId = (await _services.Graph.GetRootFolderAsync()).Id;
+                }
+                await _services.Graph.UploadAsync(destinationId, file, progress);
                 UploadProgress.Value = 1;
                 await LoadFolderAsync();
-                await PageFeedback.ShowInfoAsync("Uploaded to " + destination.Name + ".");
+                await PageFeedback.ShowInfoAsync("Uploaded to " + _currentFolderName + ".");
             }
             catch (Exception exception)
             {
@@ -450,6 +462,27 @@ namespace LiveDrive.Pages
             MoveButton.IsEnabled = selectedItems.Count > 0;
             DeleteButton.IsEnabled = selectedItems.Count > 0;
             PasteButton.IsEnabled = _services.Clipboard.CanPasteInto(_currentFolderId);
+            UpButton.IsEnabled = _history.Count > 0;
+        }
+
+        private void UpdateBreadcrumb()
+        {
+            var segments = _history.Reverse()
+                .Select(location => location.Name)
+                .Concat(new[] { _currentFolderName });
+            BreadcrumbText.Text = string.Join(" > ", segments);
+        }
+
+        private sealed class FolderLocation
+        {
+            public FolderLocation(string id, string name)
+            {
+                Id = id;
+                Name = name;
+            }
+
+            public string Id { get; }
+            public string Name { get; }
         }
     }
 }

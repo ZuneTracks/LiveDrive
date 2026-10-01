@@ -11,11 +11,16 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <TextBlock Text="My drive" Style="{StaticResource LiveDrivePageTitleStyle}"/>
+        <StackPanel>
+            <TextBlock Text="My drive" Style="{StaticResource LiveDrivePageTitleStyle}"/>
+            <TextBlock x:Name="BreadcrumbText" Text="My drive" Style="{StaticResource LiveDriveMutedTextStyle}"
+                       Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
         <CommandBar Grid.Row="1" DefaultLabelPosition="Right">
-            <AppBarButton Icon="Back" Label="Up" Click="UpButton_Click"/>
+            <AppBarButton x:Name="UpButton" Icon="Back" Label="Up" Click="UpButton_Click" IsEnabled="False"/>
             <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
             <AppBarButton Icon="Upload" Label="Upload" Click="UploadButton_Click"/>
             <AppBarSeparator/>
@@ -29,8 +34,9 @@
             <AppBarButton x:Name="DeleteButton" Label="Delete" IsEnabled="False" Click="DeleteButton_Click"/>
             <AppBarButton x:Name="PasteButton" Label="Paste" IsEnabled="False" Click="PasteButton_Click"/>
         </CommandBar>
-        <Grid Grid.Row="2">
-        <ListView x:Name="ItemsList" SelectionMode="Multiple" SelectionChanged="ItemsList_SelectionChanged">
+        <Grid Grid.Row="3">
+        <ListView x:Name="ItemsList" SelectionMode="Multiple" SelectionChanged="ItemsList_SelectionChanged"
+                  IsItemClickEnabled="True" ItemClick="ItemsList_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:DriveItem">
                         <Border Style="{StaticResource LiveDriveListRowStyle}" RightTapped="DriveItem_RightTapped">
@@ -60,7 +66,7 @@
             </StackPanel>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
                 <TextBlock Text="This folder is empty." Style="{StaticResource LiveDriveStateTitleStyle}"/>
-                <TextBlock Text="Use Upload to add a file from this phone." Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
+                <TextBlock Text="Use Upload to add a file to this folder." Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
             </StackPanel>
         </Grid>
     </Grid>

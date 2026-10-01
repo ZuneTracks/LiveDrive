@@ -2,6 +2,15 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+### Improvements
+
+- Drive folders now open directly when tapped. The Drive page shows the current folder
+  path, offers an enabled Up command when a parent folder is available, and keeps
+  folders ahead of files in each listing.
+- Upload now adds the selected file to the folder currently being viewed.
+
 ## 1.7.5.0 - 2026-09-22
 
 ### Fixes
