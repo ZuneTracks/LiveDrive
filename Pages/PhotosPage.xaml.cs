@@ -217,6 +217,7 @@ namespace LiveDrive.Pages
             _showVideos = string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
             PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title :
                 _showVideos ? "Videos" : "Photos";
+            LoadingText.Text = _showVideos ? "Loading your videos…" : "Loading your photos…";
             BackButton.Visibility = (_album != null || _collection != null) && Frame.CanGoBack
                 ? Visibility.Visible
                 : Visibility.Collapsed;
