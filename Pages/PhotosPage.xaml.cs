@@ -246,8 +246,8 @@ namespace LiveDrive.Pages
                     var filteredPreview = FilterPhotos(preview).ToList();
                     if (filteredPreview.Count > 0)
                     {
-                        await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                            filteredPreview, _thumbnailSize == "Large", CancellationToken.None);
+                        _services.PhotoIndex.SetCachedThumbnailUris(
+                            filteredPreview, _thumbnailSize == "Large");
                         RenderPhotos(filteredPreview);
                         LoadingPanel.Visibility = Visibility.Collapsed;
                         SetSyncStatus("Showing cached photos. Loading your library…");
@@ -256,8 +256,8 @@ namespace LiveDrive.Pages
                 }
 
                 var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
-                await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                    snapshot.Items, _thumbnailSize == "Large", CancellationToken.None);
+                _services.PhotoIndex.SetCachedThumbnailUris(
+                    snapshot.Items, _thumbnailSize == "Large");
                 _hasFullPhotoIndex = true;
                 if (snapshot.SourceFolders.Count == 0)
                 {

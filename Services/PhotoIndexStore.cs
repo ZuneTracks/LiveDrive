@@ -251,6 +251,14 @@ namespace LiveDrive.Services
             }
         }
 
+        public void SetCachedThumbnailUris(IEnumerable<DriveItem> items, bool preferLarge)
+        {
+            foreach (var item in items)
+            {
+                item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, preferLarge);
+            }
+        }
+
         public async Task TrimThumbnailsAsync()
         {
             await _thumbnailFileLock.WaitAsync();
