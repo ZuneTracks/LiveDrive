@@ -182,6 +182,7 @@
     <Compile Include="Services\PasswordVaultTokenStore.cs" />
     <Compile Include="Services\PhotoAlbumService.cs" />
     <Compile Include="Services\PhotoIndexStore.cs" />
+    <Compile Include="Services\ThumbnailCacheService.cs" />
     <Compile Include="Services\LiveTileService.cs" />
   </ItemGroup>
   <ItemGroup>

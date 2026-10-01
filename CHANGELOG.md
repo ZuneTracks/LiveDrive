@@ -18,6 +18,9 @@ All notable user-facing changes are documented here.
   gallery order.
 - The Drive command bar now uses **Back** for parent-folder navigation and hides item
   checkboxes until **Select** is enabled.
+- Thumbnail caching now uses a shared, two-item foreground queue that continues while
+  navigating between Photos and Videos, stops on app suspension, and no longer reports
+  expected navigation cancellation as an error.
 
 ## 1.7.5.0 - 2026-09-22
 
