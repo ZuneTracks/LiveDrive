@@ -183,38 +183,45 @@ namespace LiveDrive.Services
                     item.ThumbnailUrl = existingUri;
                     return;
                 }
-
-                var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, preferLarge ? "large" : "medium", cancellationToken);
-                if (string.IsNullOrEmpty(remoteUri))
-                {
-                    return;
-                }
-
-                item.ThumbnailUrl = remoteUri;
-                var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(
-                    GetThumbnailFileName(item.Id, preferLarge), CreationCollisionOption.ReplaceExisting);
-                try
-                {
-                    if (await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
-                    {
-                        await TrimThumbnailsCoreAsync();
-                        item.ThumbnailUrl = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
-                    }
-                    else
-                    {
-                        await file.DeleteAsync();
-                        item.ThumbnailUrl = string.Empty;
-                    }
-                }
-                catch
-                {
-                    await file.DeleteAsync();
-                    throw;
-                }
             }
             finally
             {
                 _thumbnailFileLock.Release();
+            }
+
+            var remoteUri = await graph.GetThumbnailUrlAsync(item.Id, preferLarge ? "large" : "medium", cancellationToken);
+            if (string.IsNullOrEmpty(remoteUri))
+            {
+                return;
+            }
+
+            item.ThumbnailUrl = remoteUri;
+            var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(
+                GetThumbnailFileName(item.Id, preferLarge), CreationCollisionOption.ReplaceExisting);
+            try
+            {
+                if (!await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
+                {
+                    await file.DeleteAsync();
+                    item.ThumbnailUrl = string.Empty;
+                    return;
+                }
+
+                await _thumbnailFileLock.WaitAsync(cancellationToken);
+                try
+                {
+                    await TrimThumbnailsCoreAsync();
+                    item.ThumbnailUrl = await GetLocalThumbnailUriAsync(item.Id, preferLarge);
+                }
+                finally
+                {
+                    _thumbnailFileLock.Release();
+                }
+            }
+            catch
+            {
+                await file.DeleteAsync();
+                throw;
             }
         }
 

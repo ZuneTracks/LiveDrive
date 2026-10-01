@@ -21,6 +21,7 @@ namespace LiveDrive
             RequestedTheme = ReadSavedTheme();
             Services = new AppServices();
             Suspending += OnSuspending;
+            Resuming += OnResuming;
         }
 
         public AppServices Services { get; }
@@ -90,7 +91,13 @@ namespace LiveDrive
 
         private void OnSuspending(object sender, SuspendingEventArgs e)
         {
+            Services.Thumbnails.Suspend();
             e.SuspendingOperation.GetDeferral().Complete();
+        }
+
+        private void OnResuming(object sender, object e)
+        {
+            Services.Thumbnails.Resume();
         }
 
         private static ApplicationTheme ReadSavedTheme()

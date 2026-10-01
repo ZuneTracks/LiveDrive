@@ -46,8 +46,6 @@ namespace LiveDrive.Pages
         private string _shareTitle;
         private readonly HashSet<string> _queuedThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _unavailableThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
-        private readonly SemaphoreSlim _thumbnailCacheSlots = new SemaphoreSlim(2);
-        private CancellationTokenSource _thumbnailCacheCancellation = new CancellationTokenSource();
         public ObservableCollection<DriveItem> Photos { get; } = new ObservableCollection<DriveItem>();
 
         public PhotosPage()
@@ -208,10 +206,6 @@ namespace LiveDrive.Pages
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
-            if (_thumbnailCacheCancellation.IsCancellationRequested)
-            {
-                _thumbnailCacheCancellation = new CancellationTokenSource();
-            }
             _album = e.Parameter as PhotoAlbum;
             _collection = e.Parameter as PhotoCollection;
             _showVideos = string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
@@ -228,7 +222,6 @@ namespace LiveDrive.Pages
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
-            _thumbnailCacheCancellation.Cancel();
             _shareManager.DataRequested -= ShareManager_DataRequested;
             base.OnNavigatedFrom(e);
         }
@@ -254,7 +247,7 @@ namespace LiveDrive.Pages
                     if (filteredPreview.Count > 0)
                     {
                         await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                            filteredPreview, _thumbnailSize == "Large", _thumbnailCacheCancellation.Token);
+                            filteredPreview, _thumbnailSize == "Large", CancellationToken.None);
                         RenderPhotos(filteredPreview);
                         LoadingPanel.Visibility = Visibility.Collapsed;
                         SetSyncStatus("Showing cached photos. Loading your library…");
@@ -264,7 +257,7 @@ namespace LiveDrive.Pages
 
                 var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
                 await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                    snapshot.Items, _thumbnailSize == "Large", _thumbnailCacheCancellation.Token);
+                    snapshot.Items, _thumbnailSize == "Large", CancellationToken.None);
                 _hasFullPhotoIndex = true;
                 if (snapshot.SourceFolders.Count == 0)
                 {
@@ -573,24 +566,15 @@ namespace LiveDrive.Pages
                 return;
             }
 
-            var cancellationToken = _thumbnailCacheCancellation.Token;
             try
             {
-                await _thumbnailCacheSlots.WaitAsync(cancellationToken);
-                try
+                await _services.Thumbnails.CacheAsync(item, preferLarge);
+                if (string.IsNullOrEmpty(item.ThumbnailUrl))
                 {
-                    await _services.PhotoIndex.CacheThumbnailAsync(item, _services.Graph, preferLarge, cancellationToken);
-                    if (string.IsNullOrEmpty(item.ThumbnailUrl))
-                    {
-                        _unavailableThumbnailKeys.Add(cacheKey);
-                    }
-                }
-                finally
-                {
-                    _thumbnailCacheSlots.Release();
+                    _unavailableThumbnailKeys.Add(cacheKey);
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
             }
             catch (Exception)
