@@ -670,6 +670,21 @@ namespace LiveDrive.Pages
 
         private async Task ViewPhotoAsync(DriveItem item)
         {
+            if (IsImageFile(item))
+            {
+                var images = _allPhotos.Where(IsImageFile).ToList();
+                var selectedIndex = images.FindIndex(photo => photo.Id == item.Id);
+                if (selectedIndex >= 0)
+                {
+                    Frame.Navigate(typeof(PhotoViewerPage), new PhotoViewerRequest
+                    {
+                        Items = images,
+                        SelectedIndex = selectedIndex
+                    });
+                    return;
+                }
+            }
+
             try
             {
                 var file = await CreateTemporaryPhotoFileAsync(item.Name);

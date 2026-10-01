@@ -20,10 +20,11 @@
                        Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
         <CommandBar Grid.Row="1" DefaultLabelPosition="Right">
-            <AppBarButton x:Name="UpButton" Icon="Back" Label="Up" Click="UpButton_Click" IsEnabled="False"/>
+            <AppBarButton x:Name="UpButton" Icon="Back" Label="Back" Click="UpButton_Click" IsEnabled="False"/>
             <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
             <AppBarButton Icon="Upload" Label="Upload" Click="UploadButton_Click"/>
             <AppBarSeparator/>
+            <AppBarButton x:Name="SelectionButton" Icon="SelectAll" Label="Select" Click="SelectionButton_Click"/>
             <AppBarButton x:Name="SelectAllButton" Icon="SelectAll" Label="Select all" Click="SelectAllButton_Click"/>
             <AppBarButton x:Name="ViewButton" Icon="View" Label="View" IsEnabled="False" Click="ViewButton_Click"/>
             <AppBarButton x:Name="FileInfoButton" Label="File info" IsEnabled="False" Click="FileInfoButton_Click"/>
@@ -35,7 +36,7 @@
             <AppBarButton x:Name="PasteButton" Label="Paste" IsEnabled="False" Click="PasteButton_Click"/>
         </CommandBar>
         <Grid Grid.Row="3">
-        <ListView x:Name="ItemsList" SelectionMode="Multiple" SelectionChanged="ItemsList_SelectionChanged"
+        <ListView x:Name="ItemsList" SelectionMode="None" SelectionChanged="ItemsList_SelectionChanged"
                   IsItemClickEnabled="True" ItemClick="ItemsList_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:DriveItem">

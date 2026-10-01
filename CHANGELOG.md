@@ -13,6 +13,11 @@ All notable user-facing changes are documented here.
 - Photos and Videos now restore valid cached thumbnails before rendering after the app
   reopens. Thumbnail files are retained unless the corresponding OneDrive item changed,
   reducing unnecessary downloads and making the gallery available offline sooner.
+- Tapping a photo now opens an in-app viewer. Swipe horizontally, use the previous and
+  next commands, or use keyboard navigation to browse nearby photos in the current
+  gallery order.
+- The Drive command bar now uses **Back** for parent-folder navigation and hides item
+  checkboxes until **Select** is enabled.
 
 ## 1.7.5.0 - 2026-09-22
 
