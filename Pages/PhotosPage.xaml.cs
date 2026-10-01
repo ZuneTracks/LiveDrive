@@ -250,7 +250,7 @@ namespace LiveDrive.Pages
                             filteredPreview, _thumbnailSize == "Large");
                         RenderPhotos(filteredPreview);
                         LoadingPanel.Visibility = Visibility.Collapsed;
-                        SetSyncStatus("Showing cached photos. Loading your library…");
+                        SetSyncStatus(GetCachedMediaStatus("Loading your library…"));
                         hasPreview = true;
                     }
                 }
@@ -280,7 +280,7 @@ namespace LiveDrive.Pages
                 if (_album != null || _collection != null)
                 {
                     RenderPhotos(FilterPhotos(snapshot.Items));
-                    SetSyncStatus("Showing cached photos.");
+                    SetSyncStatus(GetCachedMediaStatus());
                     SetEmptyMessage();
                     EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                     return;
@@ -288,8 +288,8 @@ namespace LiveDrive.Pages
                 RenderPhotos(FilterPhotos(snapshot.Items));
                 LoadingPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 SetSyncStatus(Photos.Count == 0
-                    ? "Finding photos across your drive…"
-                    : "Showing cached photos. Checking for updates…");
+                    ? "Finding " + GetMediaTypeLabel() + " across your drive…"
+                    : GetCachedMediaStatus("Checking for updates…"));
                 if (!hasPreview)
                 {
                     await _services.PhotoIndex.SavePreviewAsync(snapshot.Items);
@@ -352,7 +352,8 @@ namespace LiveDrive.Pages
                         nextLink = page.NextLink;
                         if (DateTimeOffset.UtcNow - lastPublished >= TimeSpan.FromSeconds(3))
                         {
-                            SetSyncStatus("Found " + indexedPhotos.Count + " photos. Scanning " + source.Name + "…");
+                            SetSyncStatus("Found " + indexedPhotos.Count + " " + GetMediaTypeLabel() +
+                                ". Scanning " + source.Name + "…");
                             lastPublished = DateTimeOffset.UtcNow;
                         }
 
@@ -396,6 +397,17 @@ namespace LiveDrive.Pages
         {
             LoadingText.Text = text;
             SyncStatusText.Text = text;
+        }
+
+        private string GetCachedMediaStatus(string suffix = null)
+        {
+            return "Showing cached " + GetMediaTypeLabel() +
+                (string.IsNullOrEmpty(suffix) ? "." : ". " + suffix);
+        }
+
+        private string GetMediaTypeLabel()
+        {
+            return _showVideos ? "videos" : "photos";
         }
 
         private async Task<List<PhotoSourceFolder>> PromptForSourceFoldersAsync(
