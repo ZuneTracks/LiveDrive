@@ -142,6 +142,7 @@
     <Compile Include="Models\PhotoCollection.cs" />
     <Compile Include="Models\PhotoIndexSnapshot.cs" />
     <Compile Include="Models\PhotoSourceFolder.cs" />
+    <Compile Include="Models\PhotoViewerRequest.cs" />
     <Compile Include="Pages\AlbumsPage.xaml.cs">
       <DependentUpon>AlbumsPage.xaml</DependentUpon>
     </Compile>
@@ -156,6 +157,9 @@
     </Compile>
     <Compile Include="Pages\PhotosPage.xaml.cs">
       <DependentUpon>PhotosPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PhotoViewerPage.xaml.cs">
+      <DependentUpon>PhotoViewerPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\SearchPage.xaml.cs">
       <DependentUpon>SearchPage.xaml</DependentUpon>
@@ -198,6 +202,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Pages\PhotosPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\PhotoViewerPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

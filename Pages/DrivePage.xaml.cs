@@ -21,6 +21,7 @@ namespace LiveDrive.Pages
         private readonly ObservableCollection<DriveItem> _items = new ObservableCollection<DriveItem>();
         private string _currentFolderId;
         private string _currentFolderName = "My drive";
+        private bool _isSelecting;
         private readonly Stack<FolderLocation> _history = new Stack<FolderLocation>();
 
         public DrivePage()
@@ -101,6 +102,17 @@ namespace LiveDrive.Pages
             {
                 ItemsList.SelectAll();
             }
+            UpdateCommandState();
+        }
+
+        private void SelectionButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isSelecting = !_isSelecting;
+            ItemsList.SelectedItems.Clear();
+            ItemsList.SelectionMode = _isSelecting
+                ? ListViewSelectionMode.Multiple
+                : ListViewSelectionMode.None;
+            ItemsList.IsItemClickEnabled = !_isSelecting;
             UpdateCommandState();
         }
 
@@ -452,15 +464,24 @@ namespace LiveDrive.Pages
         {
             var selectedItems = GetSelectedItems();
             var isSingleFile = selectedItems.Count == 1 && !selectedItems[0].IsFolder;
-            SelectAllButton.IsEnabled = _items.Count > 0;
+            SelectionButton.Label = _isSelecting ? "Done" : "Select";
+            SelectAllButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            ViewButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            FileInfoButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            SaveAsButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            ShareButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            CopyButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            MoveButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            DeleteButton.Visibility = _isSelecting ? Visibility.Visible : Visibility.Collapsed;
+            SelectAllButton.IsEnabled = _isSelecting && _items.Count > 0;
             SelectAllButton.Label = _items.Count > 0 && selectedItems.Count == _items.Count ? "Clear selection" : "Select all";
-            ViewButton.IsEnabled = selectedItems.Count == 1;
-            FileInfoButton.IsEnabled = selectedItems.Count == 1;
-            SaveAsButton.IsEnabled = isSingleFile;
-            ShareButton.IsEnabled = isSingleFile;
-            CopyButton.IsEnabled = selectedItems.Count > 0;
-            MoveButton.IsEnabled = selectedItems.Count > 0;
-            DeleteButton.IsEnabled = selectedItems.Count > 0;
+            ViewButton.IsEnabled = _isSelecting && selectedItems.Count == 1;
+            FileInfoButton.IsEnabled = _isSelecting && selectedItems.Count == 1;
+            SaveAsButton.IsEnabled = _isSelecting && isSingleFile;
+            ShareButton.IsEnabled = _isSelecting && isSingleFile;
+            CopyButton.IsEnabled = _isSelecting && selectedItems.Count > 0;
+            MoveButton.IsEnabled = _isSelecting && selectedItems.Count > 0;
+            DeleteButton.IsEnabled = _isSelecting && selectedItems.Count > 0;
             PasteButton.IsEnabled = _services.Clipboard.CanPasteInto(_currentFolderId);
             UpButton.IsEnabled = _history.Count > 0;
         }
