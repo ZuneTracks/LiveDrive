@@ -21,6 +21,8 @@ All notable user-facing changes are documented here.
 - Thumbnail caching now uses a shared, two-item foreground queue that continues while
   navigating between Photos and Videos, stops on app suspension, and no longer reports
   expected navigation cancellation as an error.
+- Photos and Videos now render their cached gallery immediately; local thumbnail-file
+  validation continues after the initial grid is visible instead of delaying startup.
 
 ## 1.7.5.0 - 2026-09-22
 
