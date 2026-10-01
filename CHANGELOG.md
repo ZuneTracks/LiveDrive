@@ -2,27 +2,34 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 1.8.0.0 - 2026-10-01
 
 ### Improvements
 
 - Drive folders now open directly when tapped. The Drive page shows the current folder
-  path, offers an enabled Up command when a parent folder is available, and keeps
+  path, offers an enabled Back command when a parent folder is available, and keeps
   folders ahead of files in each listing.
-- Upload now adds the selected file to the folder currently being viewed.
-- Photos and Videos now restore valid cached thumbnails before rendering after the app
-  reopens. Thumbnail files are retained unless the corresponding OneDrive item changed,
-  reducing unnecessary downloads and making the gallery available offline sooner.
+- Drive now starts in a clean browse mode without selection checkboxes. Use Select to
+  enable multi-item commands and Done to return to normal browsing.
+- Upload now adds the selected file to the Drive folder currently being viewed.
 - Tapping a photo now opens an in-app viewer. Swipe horizontally, use the previous and
-  next commands, or use keyboard navigation to browse nearby photos in the current
-  gallery order.
-- The Drive command bar now uses **Back** for parent-folder navigation and hides item
-  checkboxes until **Select** is enabled.
+  next commands, or use keyboard navigation to browse photos in the current filtered
+  and sorted gallery order. Videos retain their existing playback behavior.
+- Photos and Videos restore their cached gallery immediately after reopening, so cached
+  thumbnails appear without waiting for a library or network scan.
 - Thumbnail caching now uses a shared, two-item foreground queue that continues while
-  navigating between Photos and Videos, stops on app suspension, and no longer reports
-  expected navigation cancellation as an error.
-- Photos and Videos now render their cached gallery immediately; local thumbnail-file
-  validation continues after the initial grid is visible instead of delaying startup.
+  navigating between Photos and Videos and stops on app suspension. Missing or evicted
+  visible thumbnails are recovered without blocking the cached grid.
+
+### Fixes
+
+- Fixed cached thumbnails being unnecessarily discarded when OneDrive reports unchanged
+  media during delta synchronization.
+- Fixed the Photos and Videos gallery displaying an expected OperationCanceled message
+  while navigating between pages.
+- Fixed the Drive page failing to load on Windows 10 Mobile when selection mode is off.
+- Corrected all shared-gallery loading and status messages to say Photos or Videos for
+  the active media view.
 
 ## 1.7.5.0 - 2026-09-22
 
