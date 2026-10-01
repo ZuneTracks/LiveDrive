@@ -10,6 +10,9 @@ All notable user-facing changes are documented here.
   path, offers an enabled Up command when a parent folder is available, and keeps
   folders ahead of files in each listing.
 - Upload now adds the selected file to the folder currently being viewed.
+- Photos and Videos now restore valid cached thumbnails before rendering after the app
+  reopens. Thumbnail files are retained unless the corresponding OneDrive item changed,
+  reducing unnecessary downloads and making the gallery available offline sooner.
 
 ## 1.7.5.0 - 2026-09-22
 

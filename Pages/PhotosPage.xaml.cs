@@ -252,6 +252,8 @@ namespace LiveDrive.Pages
                     var filteredPreview = FilterPhotos(preview).ToList();
                     if (filteredPreview.Count > 0)
                     {
+                        await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
+                            filteredPreview, _thumbnailSize == "Large", _thumbnailCacheCancellation.Token);
                         RenderPhotos(filteredPreview);
                         LoadingPanel.Visibility = Visibility.Collapsed;
                         SetSyncStatus("Showing cached photos. Loading your library…");
@@ -260,6 +262,8 @@ namespace LiveDrive.Pages
                 }
 
                 var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
+                await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
+                    snapshot.Items, _thumbnailSize == "Large", _thumbnailCacheCancellation.Token);
                 _hasFullPhotoIndex = true;
                 if (snapshot.SourceFolders.Count == 0)
                 {
@@ -319,9 +323,17 @@ namespace LiveDrive.Pages
                             }
                             else if (IsMediaFile(item))
                             {
-                                if (indexedPhotos.ContainsKey(item.Id))
+                                DriveItem existingItem;
+                                if (indexedPhotos.TryGetValue(item.Id, out existingItem))
                                 {
-                                    await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
+                                    if (HasThumbnailChanged(existingItem, item))
+                                    {
+                                        await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
+                                    }
+                                    else
+                                    {
+                                        item.ThumbnailUrl = existingItem.ThumbnailUrl;
+                                    }
                                 }
                                 indexedPhotos[item.Id] = item;
                                 _unavailableThumbnailKeys.Remove(item.Id + "|medium");
@@ -378,6 +390,12 @@ namespace LiveDrive.Pages
                 SyncStatusPanel.Visibility = Visibility.Collapsed;
                 _isLoading = false;
             }
+        }
+
+        private static bool HasThumbnailChanged(DriveItem existingItem, DriveItem incomingItem)
+        {
+            return !string.Equals(
+                existingItem.LastModified, incomingItem.LastModified, StringComparison.Ordinal);
         }
 
         private void SetSyncStatus(string text)
