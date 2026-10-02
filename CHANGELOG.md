@@ -2,6 +2,14 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+### Improvements
+
+- While LiveDrive remains open, Photos and Videos now gradually cache off-screen media
+  thumbnails after visible items have loaded, so large libraries do not require manual
+  scrolling to prepare later images.
+
 ## 1.8.0.0 - 2026-10-01
 
 ### Improvements

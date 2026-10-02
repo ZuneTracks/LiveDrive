@@ -37,6 +37,7 @@ namespace LiveDrive.Pages
         private int _displayedPhotoCount;
         private bool _isAppendingPhotoBatch;
         private bool _hasFullPhotoIndex;
+        private int _thumbnailWarmupVersion;
         private ScrollViewer _photoScrollViewer;
         private PhotoAlbum _album;
         private PhotoCollection _collection;
@@ -960,10 +961,32 @@ namespace LiveDrive.Pages
 
         private void RenderPhotos(IEnumerable<DriveItem> items)
         {
+            _thumbnailWarmupVersion++;
             Photos.Clear();
             _allPhotos = SortPhotos(items).ToList();
             _displayedPhotoCount = 0;
             AppendPhotoBatch(InitialPhotoBatchSize);
+            StartThumbnailWarmup(_thumbnailWarmupVersion);
+        }
+
+        private async void StartThumbnailWarmup(int warmupVersion)
+        {
+            if (!_hasFullPhotoIndex || _allPhotos.Count == 0)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            for (var index = 0; index < _allPhotos.Count; index++)
+            {
+                if (warmupVersion != _thumbnailWarmupVersion || _services.Thumbnails.IsSuspended)
+                {
+                    return;
+                }
+
+                await CacheVisibleThumbnailAsync(_allPhotos[index]);
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
         }
 
         private void PhotosGrid_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)

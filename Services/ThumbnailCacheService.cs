@@ -69,6 +69,8 @@ namespace LiveDrive.Services
             _cancellation.Cancel();
         }
 
+        public bool IsSuspended => _cancellation.IsCancellationRequested;
+
         public void Resume()
         {
             if (_cancellation.IsCancellationRequested)
