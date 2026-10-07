@@ -84,6 +84,21 @@ namespace LiveDrive.Services
             await SaveAlbumsAsync(albums);
         }
 
+        public async Task RemovePhotosAsync(string albumId, IEnumerable<string> itemIds)
+        {
+            var albums = (await GetAlbumsAsync()).ToList();
+            var album = albums.FirstOrDefault(candidate => candidate.Id == albumId);
+            if (album == null)
+            {
+                throw new InvalidOperationException("The selected album no longer exists.");
+            }
+
+            var itemsToRemove = new HashSet<string>(
+                itemIds.Where(itemId => !string.IsNullOrEmpty(itemId)), StringComparer.Ordinal);
+            album.ItemIds.RemoveAll(itemsToRemove.Contains);
+            await SaveAlbumsAsync(albums);
+        }
+
         private async Task SaveAlbumsAsync(IEnumerable<PhotoAlbum> albums)
         {
             var root = new JsonObject();
