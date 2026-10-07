@@ -55,6 +55,10 @@
             <AppBarButton x:Name="AddToAlbumButton" Icon="Add" Label="Add to album" IsEnabled="False" Click="AddToAlbumButton_Click"/>
             <AppBarButton x:Name="DeleteSelectedButton" Icon="Delete" Label="Delete" IsEnabled="False" Click="DeleteSelectedButton_Click"/>
             <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
+            <CommandBar.SecondaryCommands>
+                <AppBarButton x:Name="RemoveFromAlbumButton" Icon="Remove" Label="Remove from album"
+                              IsEnabled="False" Visibility="Collapsed" Click="RemoveFromAlbumButton_Click"/>
+            </CommandBar.SecondaryCommands>
         </CommandBar>
         <Grid Grid.Row="3">
             <GridView x:Name="PhotosGrid" ItemsSource="{x:Bind Photos}" IsItemClickEnabled="True"
