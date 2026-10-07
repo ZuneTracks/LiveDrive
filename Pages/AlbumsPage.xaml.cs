@@ -62,6 +62,8 @@ namespace LiveDrive.Pages
                 var availablePhotoIds = new HashSet<string>(
                     (await _services.PhotoIndex.LoadAsync()).Items.Select(item => item.Id),
                     StringComparer.Ordinal);
+                var indexedPhotos = (await _services.PhotoIndex.LoadAsync()).Items
+                    .ToDictionary(item => item.Id, StringComparer.Ordinal);
                 Albums.Clear();
                 foreach (var album in albums)
                 {
@@ -69,13 +71,38 @@ namespace LiveDrive.Pages
                         .Where(itemId => !string.IsNullOrEmpty(itemId))
                         .Distinct(StringComparer.Ordinal)
                         .Count(availablePhotoIds.Contains);
+                    var cover = album.ItemIds
+                        .Select(itemId => indexedPhotos.ContainsKey(itemId) ? indexedPhotos[itemId] : null)
+                        .FirstOrDefault(item => item != null);
+                    if (cover != null)
+                    {
+                        _services.PhotoIndex.SetCachedThumbnailUris(new[] { cover }, false);
+                        album.CoverThumbnailUrl = cover.ThumbnailUrl;
+                        _ = CacheAlbumCoverAsync(album, cover);
+                    }
                     Albums.Add(album);
                 }
+
                 EmptyPanel.Visibility = Albums.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception exception)
             {
                 await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task CacheAlbumCoverAsync(PhotoAlbum album, DriveItem cover)
+        {
+            try
+            {
+                await _services.Thumbnails.CacheAsync(cover, false);
+                album.CoverThumbnailUrl = cover.ThumbnailUrl;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception)
+            {
             }
         }
 

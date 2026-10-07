@@ -341,7 +341,7 @@ namespace LiveDrive.Services
                 throw new InvalidOperationException("Microsoft Graph did not return an upload session.");
             }
 
-            const int chunkSize = 5 * 1024 * 1024;
+            const int chunkSize = 320 * 1024;
             using (var stream = await file.OpenStreamForReadAsync())
             {
                 var buffer = new byte[chunkSize];

@@ -644,6 +644,12 @@ namespace LiveDrive.Pages
             fileInfo.Click += async (menuSender, menuArgs) => await FileInfoDialog.ShowAsync(item);
             var addToAlbum = new MenuFlyoutItem { Text = "Add to album" };
             addToAlbum.Click += async (menuSender, menuArgs) => await AddPhotosToAlbumAsync(new[] { item });
+            if (_album != null)
+            {
+                var removeFromAlbum = new MenuFlyoutItem { Text = "Remove from album" };
+                removeFromAlbum.Click += async (menuSender, menuArgs) => await RemovePhotosFromAlbumAsync(new[] { item });
+                menu.Items.Add(removeFromAlbum);
+            }
             var saveAs = new MenuFlyoutItem { Text = "Save as" };
             saveAs.Click += async (menuSender, menuArgs) => await SavePhotoAsAsync(item);
             var share = new MenuFlyoutItem { Text = "Share" };
@@ -777,6 +783,54 @@ namespace LiveDrive.Pages
         private async Task DeletePhotoAsync(DriveItem item)
         {
             await DeletePhotosAsync(new[] { item });
+        }
+
+        private async Task RemovePhotosFromAlbumAsync(IReadOnlyList<DriveItem> photos)
+        {
+            if (_album == null)
+            {
+                return;
+            }
+
+            var items = photos.Where(photo => photo != null && !string.IsNullOrEmpty(photo.Id))
+                .GroupBy(photo => photo.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+            if (items.Count == 0)
+            {
+                return;
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = items.Count == 1 ? "Remove from album?" : "Remove from album?",
+                Content = items.Count == 1
+                    ? "Remove " + items[0].Name + " from " + _album.Name + "? The OneDrive file will remain unchanged."
+                    : "Remove " + items.Count + " items from " + _album.Name + "? The OneDrive files will remain unchanged.",
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel"
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            try
+            {
+                await _services.Albums.RemovePhotosAsync(_album.Id, items.Select(item => item.Id));
+                foreach (var item in items)
+                {
+                    Photos.Remove(item);
+                    _allPhotos.RemoveAll(photo => photo.Id == item.Id);
+                }
+                await PageFeedback.ShowInfoAsync(items.Count == 1
+                    ? "Removed from " + _album.Name + "."
+                    : "Removed " + items.Count + " items from " + _album.Name + ".");
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
         }
 
         private async Task DeletePhotosAsync(IReadOnlyList<DriveItem> selectedPhotos)

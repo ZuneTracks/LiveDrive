@@ -9,6 +9,15 @@ All notable user-facing changes are documented here.
 - While LiveDrive remains open, Photos and Videos now gradually cache off-screen media
   thumbnails after visible items have loaded, so large libraries do not require manual
   scrolling to prepare later images.
+- Album cards now show a representative photo cover using the persistent thumbnail cache.
+
+### Fixes
+
+- Large Camera Roll uploads now use Mobile-sized resumable-upload chunks instead of
+  attempting multi-megabyte requests that can exceed the Windows 10 Mobile background
+  execution budget.
+- Added Remove from album for album members. This removes only the LiveDrive album
+  membership and leaves the original OneDrive file unchanged.
 
 ## 1.8.0.0 - 2026-10-01
 
