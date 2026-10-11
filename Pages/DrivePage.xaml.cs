@@ -17,10 +17,12 @@ namespace LiveDrive.Pages
 {
     public sealed partial class DrivePage : Page
     {
+        private const string DriveSortSettingName = "DriveSort";
         private readonly AppServices _services;
         private readonly ObservableCollection<DriveItem> _items = new ObservableCollection<DriveItem>();
         private string _currentFolderId;
         private string _currentFolderName = "My drive";
+        private string _driveSort;
         private bool _isSelecting;
         private readonly Stack<FolderLocation> _history = new Stack<FolderLocation>();
 
@@ -29,6 +31,7 @@ namespace LiveDrive.Pages
             InitializeComponent();
             _services = ((App)Application.Current).Services;
             ItemsList.ItemsSource = _items;
+            ApplyDriveSort(ApplicationData.Current.LocalSettings.Values[DriveSortSettingName] as string);
             UpdateCommandState();
             Loaded += async (sender, args) => await LoadFolderAsync();
         }
@@ -42,9 +45,7 @@ namespace LiveDrive.Pages
                 var items = await _services.Graph.GetChildrenAsync(_currentFolderId);
                 ClearDriveSelection();
                 _items.Clear();
-                foreach (var item in items
-                    .OrderByDescending(item => item.IsFolder)
-                    .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+                foreach (var item in SortDriveItems(items))
                 {
                     _items.Add(item);
                 }
@@ -76,6 +77,17 @@ namespace LiveDrive.Pages
         private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
             await LoadFolderAsync();
+        }
+
+        private void DriveSort_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyDriveSort((sender as FrameworkElement).Tag as string);
+            var sortedItems = SortDriveItems(_items).ToList();
+            _items.Clear();
+            foreach (var item in sortedItems)
+            {
+                _items.Add(item);
+            }
         }
 
         private void ItemsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -501,6 +513,61 @@ namespace LiveDrive.Pages
                 .Select(location => location.Name)
                 .Concat(new[] { _currentFolderName });
             BreadcrumbText.Text = string.Join(" > ", segments);
+        }
+
+        private void ApplyDriveSort(string sort)
+        {
+            _driveSort = sort == "NameDescending" || sort == "ModifiedNewest" || sort == "SizeLargest"
+                ? sort
+                : "NameAscending";
+            ApplicationData.Current.LocalSettings.Values[DriveSortSettingName] = _driveSort;
+            SortButton.Label = GetDriveSortLabel(_driveSort);
+        }
+
+        private IEnumerable<DriveItem> SortDriveItems(IEnumerable<DriveItem> items)
+        {
+            var foldersFirst = items.OrderByDescending(item => item.IsFolder);
+            if (_driveSort == "NameDescending")
+            {
+                return foldersFirst
+                    .ThenByDescending(item => item.Name, StringComparer.OrdinalIgnoreCase);
+            }
+            if (_driveSort == "ModifiedNewest")
+            {
+                return foldersFirst
+                    .ThenByDescending(GetLastModifiedDate)
+                    .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase);
+            }
+            if (_driveSort == "SizeLargest")
+            {
+                return foldersFirst
+                    .ThenByDescending(item => item.Size)
+                    .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase);
+            }
+            return foldersFirst.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static DateTimeOffset GetLastModifiedDate(DriveItem item)
+        {
+            DateTimeOffset date;
+            return DateTimeOffset.TryParse(item.LastModified, out date) ? date : DateTimeOffset.MinValue;
+        }
+
+        private static string GetDriveSortLabel(string sort)
+        {
+            if (sort == "NameDescending")
+            {
+                return "Name: Z-A";
+            }
+            if (sort == "ModifiedNewest")
+            {
+                return "Modified";
+            }
+            if (sort == "SizeLargest")
+            {
+                return "Size: largest";
+            }
+            return "Name: A-Z";
         }
 
         private sealed class FolderLocation
