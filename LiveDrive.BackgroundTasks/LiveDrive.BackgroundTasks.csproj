@@ -38,6 +38,7 @@
   <ItemGroup>
     <Compile Include="CameraBackupBackgroundTask.cs" />
     <Compile Include="..\Models\AuthToken.cs"><Link>Models\AuthToken.cs</Link></Compile>
+    <Compile Include="..\Models\CameraUploadSessionState.cs"><Link>Models\CameraUploadSessionState.cs</Link></Compile>
     <Compile Include="..\Models\DriveItem.cs"><Link>Models\DriveItem.cs</Link></Compile>
     <Compile Include="..\Models\DriveItemPage.cs"><Link>Models\DriveItemPage.cs</Link></Compile>
     <Compile Include="..\Models\OneDriveQuota.cs"><Link>Models\OneDriveQuota.cs</Link></Compile>

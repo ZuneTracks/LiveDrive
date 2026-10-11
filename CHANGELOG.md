@@ -10,12 +10,21 @@ All notable user-facing changes are documented here.
   thumbnails after visible items have loaded, so large libraries do not require manual
   scrolling to prepare later images.
 - Album cards now show a representative photo cover using the persistent thumbnail cache.
+- Scheduled Camera Roll backup now repairs a missing Windows timer registration whenever
+  LiveDrive next opens, rather than requiring the user to toggle backup off and on.
+- Large Camera Roll files now persist their Graph upload-session progress and continue
+  from the server-confirmed byte range on the next background activation.
+- Background Camera Roll discovery now advances through the queue beyond the newest
+  twelve items while continuing to prioritize recent captures.
 
 ### Fixes
 
 - Large Camera Roll uploads now use Mobile-sized resumable-upload chunks instead of
   attempting multi-megabyte requests that can exceed the Windows 10 Mobile background
   execution budget.
+- Scheduled Camera Roll work is now limited to one queued item or resumable-upload
+  chunk per activation, avoiding multi-file runs that exhaust Mobile background time.
+- Fixed the Camera Roll background lock expiring while a legitimate upload is running.
 - Added Remove from album for album members. This removes only the LiveDrive album
   membership and leaves the original OneDrive file unchanged.
 

@@ -50,6 +50,20 @@ namespace LiveDrive
             }
 
             Window.Current.Activate();
+            _ = RestoreCameraBackupRegistrationAsync();
+        }
+
+        private async System.Threading.Tasks.Task RestoreCameraBackupRegistrationAsync()
+        {
+            try
+            {
+                await Services.CameraBackupScheduler.EnsureRegisteredAsync();
+            }
+            catch (System.Exception exception)
+            {
+                Services.CameraBackupState.SaveLastResult(
+                    "Scheduled Camera Roll backup could not be restored: " + exception.Message);
+            }
         }
 
         public string SendCameraBackupToastDiagnostic()

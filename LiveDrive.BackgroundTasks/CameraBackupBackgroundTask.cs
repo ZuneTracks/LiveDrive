@@ -31,6 +31,14 @@ namespace LiveDrive.BackgroundTasks
             var state = new CameraBackupStateStore();
             var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
             var backup = new CameraBackupService(graph, new CameraUploadHistoryStore(), state);
+            state.SaveLastBackgroundActivation(DateTimeOffset.Now);
+            if (!state.IsScheduledBackupEnabled)
+            {
+                state.SaveLastResult("Ignored a Camera Roll background activation because scheduled backup is off.");
+                deferral.Complete();
+                cancellation.Dispose();
+                return;
+            }
             if (!await state.TryAcquireBackgroundRunLockAsync())
             {
                 deferral.Complete();

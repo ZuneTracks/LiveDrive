@@ -4,8 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using LiveDrive.Models;
 using Windows.Storage;
 using Windows.Storage.Search;
+#if BACKGROUND_TASK
+using CameraUploadSessionState = LiveDrive.BackgroundTasks.CameraUploadSessionState;
+#endif
 
 namespace LiveDrive.Services
 {
@@ -20,8 +24,9 @@ namespace LiveDrive.Services
             ".jpg", ".jpeg", ".png", ".mp4", ".mov"
         };
         private const int MaximumUploadsPerRun = 10;
-        private const int MaximumUploadsPerBackgroundRun = 5;
+        private const int MaximumUploadsPerBackgroundRun = 1;
         private const uint RecentFilesPerBackgroundRun = 12;
+        private const int MaximumPendingPaths = 100;
 
         private readonly IGraphClient _graph;
         private readonly CameraUploadHistoryStore _history;
@@ -168,6 +173,7 @@ namespace LiveDrive.Services
 
             var uploadedCount = 0;
             var skippedCount = 0;
+            var uploadSession = await _state.LoadUploadSessionAsync();
             while (pendingPaths.Count > 0 &&
                 uploadedCount + skippedCount < MaximumUploadsPerBackgroundRun)
             {
@@ -195,10 +201,39 @@ namespace LiveDrive.Services
 
                 try
                 {
-                    await _graph.UploadAsync(destinationFolderId, file, null, false, true, cancellationToken);
+                    var properties = await file.GetBasicPropertiesAsync();
+                    if (properties.Size > 4 * 1024 * 1024)
+                    {
+                        if (uploadSession != null &&
+                            !string.Equals(uploadSession.FilePath, file.Path, StringComparison.OrdinalIgnoreCase))
+                        {
+                            await _state.ClearUploadSessionAsync();
+                            uploadSession = null;
+                        }
+
+                        var result = await _graph.UploadLargeFileChunkAsync(
+                            destinationFolderId, file, uploadSession, false, true, cancellationToken);
+                        if (!result.IsComplete)
+                        {
+                            await _state.SaveUploadSessionAsync(result.Session);
+                            _state.SaveLastResult(
+                                "Continued " + file.Name + " from " + result.Session.NextOffset + " of " +
+                                properties.Size + " bytes. It will continue at the next scheduled check.");
+                            return 0;
+                        }
+
+                        await _state.ClearUploadSessionAsync();
+                        uploadSession = null;
+                    }
+                    else
+                    {
+                        await _graph.UploadAsync(destinationFolderId, file, null, false, true, cancellationToken);
+                    }
                 }
                 catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
                 {
+                    await _state.ClearUploadSessionAsync();
+                    uploadSession = null;
                     await _state.MarkUploadedAsync(file.Path);
                     pendingPaths.RemoveAt(0);
                     await _state.SavePendingPathsAsync(pendingPaths);
@@ -233,9 +268,32 @@ namespace LiveDrive.Services
             var queuedPaths = new HashSet<string>(pendingPaths, StringComparer.OrdinalIgnoreCase);
             var query = KnownFolders.CameraRoll.CreateFileQuery(CommonFileQuery.OrderByDate);
             var recentFiles = await query.GetFilesAsync(0, RecentFilesPerBackgroundRun);
-            foreach (var file in recentFiles)
+            QueueCameraRollFiles(recentFiles, uploadedPaths, queuedPaths, pendingPaths, cancellationToken);
+
+            if (pendingPaths.Count < MaximumPendingPaths)
+            {
+                var offset = _state.GetPendingScanOffset();
+                var olderFiles = await query.GetFilesAsync(offset, RecentFilesPerBackgroundRun);
+                QueueCameraRollFiles(olderFiles, uploadedPaths, queuedPaths, pendingPaths, cancellationToken);
+                _state.SavePendingScanOffset(olderFiles.Count < RecentFilesPerBackgroundRun
+                    ? 0
+                    : offset + (uint)olderFiles.Count);
+            }
+
+            await _state.SavePendingPathsAsync(pendingPaths);
+        }
+
+        private static void QueueCameraRollFiles(
+            IReadOnlyList<StorageFile> files, ISet<string> uploadedPaths, ISet<string> queuedPaths,
+            ICollection<string> pendingPaths, CancellationToken cancellationToken)
+        {
+            foreach (var file in files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (pendingPaths.Count >= MaximumPendingPaths)
+                {
+                    return;
+                }
                 if (SupportedExtensions.Contains(Path.GetExtension(file.Name)) &&
                     !uploadedPaths.Contains(file.Path) &&
                     queuedPaths.Add(file.Path))
@@ -243,7 +301,6 @@ namespace LiveDrive.Services
                     pendingPaths.Add(file.Path);
                 }
             }
-            await _state.SavePendingPathsAsync(pendingPaths);
         }
 
         internal static bool IsNameAlreadyExistsConflict(Exception exception)

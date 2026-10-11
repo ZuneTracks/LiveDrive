@@ -83,6 +83,11 @@ namespace LiveDrive.Pages
                     : "Scheduled Camera Roll backup is off. Last check: " + lastResult;
             }
 
+            if (!_services.CameraBackupScheduler.IsRegistered)
+            {
+                return "Scheduled Camera Roll backup is on but its Windows task is being restored.";
+            }
+
             return string.IsNullOrEmpty(lastResult)
                 ? "Scheduled Camera Roll backup is on. Windows runs it when resources allow."
                 : "Scheduled Camera Roll backup is on. " + lastResult;
@@ -91,9 +96,13 @@ namespace LiveDrive.Pages
         private void UpdateLastCameraRollScanStatus()
         {
             var lastScanStarted = _services.CameraBackupState.GetLastScanStarted();
-            LastCameraRollScanStatus.Text = lastScanStarted.HasValue
+            var lastActivation = _services.CameraBackupState.GetLastBackgroundActivation();
+            var scanStatus = lastScanStarted.HasValue
                 ? "Last Camera Roll scan started: " + lastScanStarted.Value.ToLocalTime().ToString("g") + "."
                 : "Camera Roll has not been scanned yet.";
+            LastCameraRollScanStatus.Text = lastActivation.HasValue
+                ? "Last background activation: " + lastActivation.Value.ToLocalTime().ToString("g") + ". " + scanStatus
+                : scanStatus;
         }
 
         private async void CheckCameraRollButton_Click(object sender, RoutedEventArgs e)
