@@ -11,6 +11,10 @@ using System.Threading.Tasks;
 using LiveDrive.Models;
 using Windows.Data.Json;
 using Windows.Storage;
+#if BACKGROUND_TASK
+using CameraUploadChunkResult = LiveDrive.BackgroundTasks.CameraUploadChunkResult;
+using CameraUploadSessionState = LiveDrive.BackgroundTasks.CameraUploadSessionState;
+#endif
 
 namespace LiveDrive.Services
 {
@@ -248,9 +252,19 @@ namespace LiveDrive.Services
             var properties = await file.GetBasicPropertiesAsync();
             if (properties.Size > 4 * 1024 * 1024)
             {
-                await UploadLargeFileAsync(
-                    parentId, file, properties.Size, progress, renameOnConflict, failOnConflict, cancellationToken);
-                return;
+                var session = new CameraUploadSessionState();
+                while (true)
+                {
+                    var result = await UploadLargeFileChunkAsync(
+                        parentId, file, session, renameOnConflict, failOnConflict, cancellationToken);
+                    if (result.IsComplete)
+                    {
+                        progress?.Report(1);
+                        return;
+                    }
+                    session = result.Session;
+                    progress?.Report((double)session.NextOffset / properties.Size);
+                }
             }
 
             var target = string.IsNullOrEmpty(parentId)
@@ -315,58 +329,140 @@ namespace LiveDrive.Services
             }
         }
 
-        private async Task UploadLargeFileAsync(string parentId, StorageFile file, ulong size, IProgress<double> progress,
+        public async Task<CameraUploadChunkResult> UploadLargeFileChunkAsync(
+            string parentId, StorageFile file, CameraUploadSessionState session,
             bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken)
         {
-            var target = string.IsNullOrEmpty(parentId)
-                ? "/me/drive/root:/" + Uri.EscapeDataString(file.Name) + ":/createUploadSession"
-                : "/me/drive/items/" + Uri.EscapeDataString(parentId) + ":/" + Uri.EscapeDataString(file.Name) + ":/createUploadSession";
-            var sessionRequest = new HttpRequestMessage(HttpMethod.Post, target)
+            var properties = await file.GetBasicPropertiesAsync();
+            if (properties.Size <= 4 * 1024 * 1024)
             {
-                Content = new StringContent(
-                    "{\"item\":{\"@microsoft.graph.conflictBehavior\":\"" +
-                    (renameOnConflict ? "rename" : failOnConflict ? "fail" : "replace") + "\"}}",
-                    Encoding.UTF8,
-                    "application/json")
-            };
-            JsonObject session;
-            using (var response = await SendAsync(
-                sessionRequest, HttpCompletionOption.ResponseContentRead, false, cancellationToken))
-            {
-                session = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+                throw new InvalidOperationException("Resumable upload sessions are only used for files larger than 4 MB.");
             }
-            var uploadUrl = session.GetNamedString("uploadUrl", string.Empty);
-            if (string.IsNullOrEmpty(uploadUrl))
+
+            var modified = properties.DateModified.ToString("o");
+            if (!CanResumeUploadSession(session, parentId, file.Path, properties.Size, modified) ||
+                !await TryRefreshUploadSessionOffsetAsync(session, cancellationToken))
             {
-                throw new InvalidOperationException("Microsoft Graph did not return an upload session.");
+                session = await CreateUploadSessionAsync(
+                    parentId, file, properties.Size, modified, renameOnConflict, failOnConflict, cancellationToken);
             }
 
             const int chunkSize = 320 * 1024;
             using (var stream = await file.OpenStreamForReadAsync())
             {
-                var buffer = new byte[chunkSize];
-                long offset = 0;
-                int read;
-                while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                stream.Seek(session.NextOffset, SeekOrigin.Begin);
+                var remaining = properties.Size - (ulong)session.NextOffset;
+                var buffer = new byte[(int)Math.Min((ulong)chunkSize, remaining)];
+                var read = await stream.ReadAsync(buffer, 0, buffer.Length);
+                if (read == 0)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    using (var content = new ByteArrayContent(buffer, 0, read))
-                    using (var request = new HttpRequestMessage(HttpMethod.Put, uploadUrl) { Content = content })
+                    throw new InvalidOperationException("The Camera Roll file ended before its upload session completed.");
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                using (var content = new ByteArrayContent(buffer, 0, read))
+                using (var request = new HttpRequestMessage(HttpMethod.Put, session.UploadUrl) { Content = content })
+                {
+                    content.Headers.Add("Content-Range", "bytes " + session.NextOffset + "-" +
+                        (session.NextOffset + read - 1) + "/" + properties.Size);
+                    using (var response = await _http.SendAsync(request, cancellationToken))
                     {
-                        content.Headers.Add("Content-Range", "bytes " + offset + "-" + (offset + read - 1) + "/" + size);
-                        var response = await _http.SendAsync(request, cancellationToken);
-                        if (!response.IsSuccessStatusCode && (int)response.StatusCode != 202)
+                        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.Accepted)
                         {
                             var error = await response.Content.ReadAsStringAsync();
-                            response.Dispose();
                             throw new InvalidOperationException("Upload failed (" + (int)response.StatusCode + "): " + error);
                         }
-                        response.Dispose();
+
+                        if (response.StatusCode != HttpStatusCode.Accepted)
+                        {
+                            return new CameraUploadChunkResult { IsComplete = true };
+                        }
+
+                        session.NextOffset = GetNextExpectedOffset(
+                            JsonObject.Parse(await response.Content.ReadAsStringAsync()), session.NextOffset + read);
+                        return new CameraUploadChunkResult { Session = session, IsComplete = false };
                     }
-                    offset += read;
-                    progress?.Report((double)offset / size);
                 }
             }
+        }
+
+        private async Task<CameraUploadSessionState> CreateUploadSessionAsync(
+            string parentId, StorageFile file, ulong size, string modified,
+            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken)
+        {
+            var target = string.IsNullOrEmpty(parentId)
+                ? "/me/drive/root:/" + Uri.EscapeDataString(file.Name) + ":/createUploadSession"
+                : "/me/drive/items/" + Uri.EscapeDataString(parentId) + ":/" + Uri.EscapeDataString(file.Name) + ":/createUploadSession";
+            var request = new HttpRequestMessage(HttpMethod.Post, target)
+            {
+                Content = new StringContent(
+                    "{\"item\":{\"@microsoft.graph.conflictBehavior\":\"" +
+                    (renameOnConflict ? "rename" : failOnConflict ? "fail" : "replace") + "\"}}",
+                    Encoding.UTF8, "application/json")
+            };
+            using (var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, false, cancellationToken))
+            {
+                var json = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+                var uploadUrl = json.GetNamedString("uploadUrl", string.Empty);
+                if (string.IsNullOrEmpty(uploadUrl))
+                {
+                    throw new InvalidOperationException("Microsoft Graph did not return an upload session.");
+                }
+                return new CameraUploadSessionState
+                {
+                    FilePath = file.Path,
+                    DestinationFolderId = parentId,
+                    FileSize = size,
+                    FileModifiedUtc = modified,
+                    UploadUrl = uploadUrl,
+                    NextOffset = 0
+                };
+            }
+        }
+
+        private async Task<bool> TryRefreshUploadSessionOffsetAsync(
+            CameraUploadSessionState session, CancellationToken cancellationToken)
+        {
+            using (var response = await _http.GetAsync(session.UploadUrl, cancellationToken))
+            {
+                if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Gone)
+                {
+                    return false;
+                }
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    throw new InvalidOperationException("Could not resume upload (" + (int)response.StatusCode + "): " + error);
+                }
+                session.NextOffset = GetNextExpectedOffset(
+                    JsonObject.Parse(await response.Content.ReadAsStringAsync()), session.NextOffset);
+                return true;
+            }
+        }
+
+        private static bool CanResumeUploadSession(
+            CameraUploadSessionState session, string parentId, string path, ulong size, string modified)
+        {
+            return session != null && !string.IsNullOrEmpty(session.UploadUrl) &&
+                string.Equals(session.DestinationFolderId, parentId, StringComparison.Ordinal) &&
+                string.Equals(session.FilePath, path, StringComparison.OrdinalIgnoreCase) &&
+                session.FileSize == size && string.Equals(session.FileModifiedUtc, modified, StringComparison.Ordinal);
+        }
+
+        private static long GetNextExpectedOffset(JsonObject json, long fallback)
+        {
+            var ranges = json.GetNamedArray("nextExpectedRanges", null);
+            if (ranges == null || ranges.Count == 0)
+            {
+                return fallback;
+            }
+
+            var range = ranges[0].GetString();
+            var separator = range.IndexOf('-');
+            long offset;
+            return separator >= 0 && long.TryParse(range.Substring(0, separator), out offset)
+                ? offset
+                : fallback;
         }
 
         private static JsonObject CreateParentReferencePayload(string destinationFolderId)

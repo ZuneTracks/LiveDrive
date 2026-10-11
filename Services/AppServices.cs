@@ -15,7 +15,7 @@ namespace LiveDrive.Services
             CameraUploadHistory = new CameraUploadHistoryStore();
             CameraBackupState = new CameraBackupStateStore();
             CameraBackup = new CameraBackupService(Graph, CameraUploadHistory, CameraBackupState);
-            CameraBackupScheduler = new CameraBackupScheduler();
+            CameraBackupScheduler = new CameraBackupScheduler(CameraBackupState);
         }
 
         public ITokenStore TokenStore { get; }

@@ -4,6 +4,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Models;
 using Windows.Storage;
+#if BACKGROUND_TASK
+using CameraUploadChunkResult = LiveDrive.BackgroundTasks.CameraUploadChunkResult;
+using CameraUploadSessionState = LiveDrive.BackgroundTasks.CameraUploadSessionState;
+#endif
 
 namespace LiveDrive.Services
 {
@@ -28,6 +32,9 @@ namespace LiveDrive.Services
         Task UploadAsync(string parentId, StorageFile file, IProgress<double> progress = null,
             bool renameOnConflict = false, bool failOnConflict = false,
             CancellationToken cancellationToken = default(CancellationToken));
+        Task<CameraUploadChunkResult> UploadLargeFileChunkAsync(
+            string parentId, StorageFile file, CameraUploadSessionState session,
+            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken);
         Task CopyAsync(DriveItem item, string destinationFolderId);
         Task MoveAsync(DriveItem item, string destinationFolderId);
         Task DeleteAsync(DriveItem item);
