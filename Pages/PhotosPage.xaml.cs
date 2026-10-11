@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,8 @@ namespace LiveDrive.Pages
         private const string PhotoSortSettingName = "PhotoSort";
         private const int InitialPhotoBatchSize = 150;
         private const int PhotoBatchSize = 100;
+        private static readonly HashSet<string> VideoExtensions = new HashSet<string>(
+            new[] { ".mp4", ".mov" }, StringComparer.OrdinalIgnoreCase);
         private bool _isLoading;
         private bool _isSelecting;
         private bool _isDeletingPhotos;
@@ -1208,7 +1211,13 @@ namespace LiveDrive.Pages
 
         private static bool IsVideoFile(DriveItem item)
         {
-            return item.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
+            if (item.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return !item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
+                VideoExtensions.Contains(Path.GetExtension(item.Name));
         }
 
         private async void PhotosGrid_ItemClick(object sender, ItemClickEventArgs e)
