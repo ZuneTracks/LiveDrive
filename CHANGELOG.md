@@ -25,6 +25,8 @@ All notable user-facing changes are documented here.
 - Scheduled Camera Roll work is now limited to one queued item or resumable-upload
   chunk per activation, avoiding multi-file runs that exhaust Mobile background time.
 - Fixed the Camera Roll background lock expiring while a legitimate upload is running.
+- Fixed valid `.mp4` and `.mov` videos being excluded from Videos when Microsoft Graph
+  does not provide a usable video MIME type.
 - Added Remove from album for album members. This removes only the LiveDrive album
   membership and leaves the original OneDrive file unchanged.
 
