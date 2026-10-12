@@ -21,7 +21,7 @@ All notable user-facing changes are documented here.
   activations, lock contention, upload progress, cancellation, and failures. The log
   can be copied or cleared from the Camera Backup page.
 - Manual Camera Backup uploads now show an individual progress bar on the active queue
-  item in addition to the overall upload progress.
+  item in addition to the overall upload progress, including its uploaded percentage.
 
 ### Fixes
 

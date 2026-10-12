@@ -63,9 +63,12 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="{x:Bind Name}" FontSize="16" TextTrimming="CharacterEllipsis"/>
-                                <ProgressBar Minimum="0" Maximum="1" Value="{x:Bind Progress, Mode=OneWay}"
-                                             Visibility="{x:Bind ProgressVisibility, Mode=OneWay}"
-                                             Height="4" Margin="0,6,0,0"/>
+                                <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,6,0,0">
+                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}"
+                                                 Height="8" MinWidth="180"/>
+                                    <TextBlock Text="{Binding ProgressLabel}" Style="{StaticResource LiveDriveMutedTextStyle}"
+                                               FontSize="12" Margin="0,3,0,0"/>
+                                </StackPanel>
                             </StackPanel>
                             <TextBlock Grid.Column="1" Text="{x:Bind Status}" Style="{StaticResource LiveDriveMutedTextStyle}"
                                        VerticalAlignment="Center"/>

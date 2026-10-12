@@ -259,12 +259,14 @@ namespace LiveDrive.Pages
                     var queueItem = Queue[0];
                     queueItem.Status = "Uploading";
                     queueItem.Progress = 0;
+                    queueItem.ProgressLabel = "Starting upload…";
                     queueItem.ProgressVisibility = Visibility.Visible;
                     UploadProgressText.Text = "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + file.Name;
                     var progress = new DelegateProgress<double>(value =>
                     {
                         UploadProgress.Value = (completedFiles + value) / totalFiles;
                         queueItem.Progress = value;
+                        queueItem.ProgressLabel = Math.Round(value * 100) + "% uploaded";
                     });
                     try
                     {
@@ -281,6 +283,7 @@ namespace LiveDrive.Pages
                         continue;
                     }
                     queueItem.Progress = 1;
+                    queueItem.ProgressLabel = "Uploaded";
                     queueItem.ProgressVisibility = Visibility.Collapsed;
                     await _services.CameraBackupState.MarkUploadedAsync(file.Path);
                     await _services.CameraUploadHistory.AddAsync(file.Name);
