@@ -54,7 +54,7 @@
             <ListView ItemsSource="{x:Bind Queue}">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:BackupItem">
-                        <Border Background="Transparent" Padding="0,12">
+                        <Border Background="Transparent" Padding="0,12" Visibility="{Binding QueueVisibility}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
