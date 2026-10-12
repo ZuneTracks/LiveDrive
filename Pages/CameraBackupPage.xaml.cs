@@ -258,15 +258,13 @@ namespace LiveDrive.Pages
 
                     var queueItem = Queue[0];
                     queueItem.Status = "Uploading";
-                    queueItem.Progress = 0;
-                    queueItem.ProgressLabel = "Starting upload…";
-                    queueItem.ProgressVisibility = Visibility.Visible;
-                    UploadProgressText.Text = "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + file.Name;
+                    UploadProgressText.Text = GetManualUploadProgressText(
+                        completedFiles, totalFiles, file.Name, 0);
                     var progress = new DelegateProgress<double>(value =>
                     {
                         UploadProgress.Value = (completedFiles + value) / totalFiles;
-                        queueItem.Progress = value;
-                        queueItem.ProgressLabel = Math.Round(value * 100) + "% uploaded";
+                        UploadProgressText.Text = GetManualUploadProgressText(
+                            completedFiles, totalFiles, file.Name, value);
                     });
                     try
                     {
@@ -282,9 +280,6 @@ namespace LiveDrive.Pages
                         skippedFiles++;
                         continue;
                     }
-                    queueItem.Progress = 1;
-                    queueItem.ProgressLabel = "Uploaded";
-                    queueItem.ProgressVisibility = Visibility.Collapsed;
                     await _services.CameraBackupState.MarkUploadedAsync(file.Path);
                     await _services.CameraUploadHistory.AddAsync(file.Name);
                     existingNames.Add(file.Name);
@@ -386,6 +381,13 @@ namespace LiveDrive.Pages
             RecentlyUploadedButton.Content = RecentlyUploaded.Count == 0
                 ? "Recently uploaded"
                 : "Recently uploaded (" + RecentlyUploaded.Count + ")";
+        }
+
+        private static string GetManualUploadProgressText(
+            int completedFiles, int totalFiles, string fileName, double progress)
+        {
+            return "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + fileName +
+                " (" + Math.Round(progress * 100) + "% uploaded)";
         }
     }
 }
