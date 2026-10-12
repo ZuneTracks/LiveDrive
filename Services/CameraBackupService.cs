@@ -155,6 +155,8 @@ namespace LiveDrive.Services
             _state.SaveLastScanStarted(DateTimeOffset.Now);
             var pendingPaths = (await _state.LoadPendingPathsAsync()).ToList();
             await QueueRecentCameraRollFilesAsync(pendingPaths, cancellationToken);
+            await _state.AppendDiagnosticAsync(
+                "Scheduled queue checked", pendingPaths.Count + " item(s) waiting.");
             if (pendingPaths.Count == 0)
             {
                 _state.SaveLastResult("No new recent Camera Roll items are waiting to upload.");
@@ -216,6 +218,9 @@ namespace LiveDrive.Services
                         if (!result.IsComplete)
                         {
                             await _state.SaveUploadSessionAsync(result.Session);
+                            await _state.AppendDiagnosticAsync(
+                                "Large upload advanced", file.Name + " at " + result.Session.NextOffset +
+                                " of " + properties.Size + " bytes.");
                             _state.SaveLastResult(
                                 "Continued " + file.Name + " from " + result.Session.NextOffset + " of " +
                                 properties.Size + " bytes. It will continue at the next scheduled check.");
@@ -243,6 +248,7 @@ namespace LiveDrive.Services
 
                 await _state.MarkUploadedAsync(file.Path);
                 await _history.AddAsync(file.Name);
+                await _state.AppendDiagnosticAsync("Camera Roll item uploaded", file.Name);
                 pendingPaths.RemoveAt(0);
                 await _state.SavePendingPathsAsync(pendingPaths);
                 uploadedCount++;

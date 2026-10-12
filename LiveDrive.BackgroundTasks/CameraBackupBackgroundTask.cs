@@ -32,22 +32,27 @@ namespace LiveDrive.BackgroundTasks
             var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
             var backup = new CameraBackupService(graph, new CameraUploadHistoryStore(), state);
             state.SaveLastBackgroundActivation(DateTimeOffset.Now);
+            await state.AppendDiagnosticAsync("Background task activated");
             if (!state.IsScheduledBackupEnabled)
             {
                 state.SaveLastResult("Ignored a Camera Roll background activation because scheduled backup is off.");
+                await state.AppendDiagnosticAsync("Background task ignored", "Scheduled backup is off.");
                 deferral.Complete();
                 cancellation.Dispose();
                 return;
             }
             if (!await state.TryAcquireBackgroundRunLockAsync())
             {
+                await state.AppendDiagnosticAsync("Background task skipped", "Another Camera Roll task holds the lock.");
                 deferral.Complete();
                 cancellation.Dispose();
                 return;
             }
             try
             {
+                await state.AppendDiagnosticAsync("Background task lock acquired");
                 var uploadedCount = await backup.UploadPendingCameraRollItemsAsync(cancellation.Token);
+                await state.AppendDiagnosticAsync("Background task completed", "Uploaded " + uploadedCount + " item(s).");
                 if (uploadedCount > 0)
                 {
                     SubmitCompletionToast(state, uploadedCount);
@@ -59,6 +64,8 @@ namespace LiveDrive.BackgroundTasks
                 state.SaveLastResult(
                     "Background Camera Roll backup paused (" +
                     (reason.HasValue ? reason.Value.ToString() : "unknown reason") + ").");
+                await state.AppendDiagnosticAsync(
+                    "Background task cancelled", reason.HasValue ? reason.Value.ToString() : "Unknown reason");
             }
             catch (Exception exception)
             {
@@ -66,6 +73,9 @@ namespace LiveDrive.BackgroundTasks
                 state.SaveToastDiagnostic(
                     "Background Camera Roll backup failed at " + DateTimeOffset.Now.ToString("g") + ". " +
                     exception.Message);
+                await state.AppendDiagnosticAsync(
+                    "Background task failed", exception.GetType().Name + " (0x" +
+                    exception.HResult.ToString("X8") + "): " + exception.Message);
             }
             finally
             {

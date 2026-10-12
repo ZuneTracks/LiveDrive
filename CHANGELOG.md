@@ -17,6 +17,9 @@ All notable user-facing changes are documented here.
   from the server-confirmed byte range on the next background activation.
 - Background Camera Roll discovery now advances through the queue beyond the newest
   twelve items while continuing to prioritize recent captures.
+- Camera Backup now keeps a privacy-safe rolling diagnostic log of background
+  activations, lock contention, upload progress, cancellation, and failures. The log
+  can be copied or cleared from the Camera Backup page.
 
 ### Fixes
 

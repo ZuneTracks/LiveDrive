@@ -23,6 +23,7 @@ namespace LiveDrive.Services
         private const string PendingPathsFileName = "camera-backup-pending-paths.json";
         private const string BackgroundRunLockFileName = "camera-backup-background.lock";
         private const string UploadSessionFileName = "camera-backup-upload-session.json";
+        private const string DiagnosticLogFileName = "camera-backup-diagnostics.log";
         private const string DestinationFolderIdSettingName = "CameraBackupDestinationFolderId";
         private const string ScheduledBackupEnabledSettingName = "CameraBackupScheduledEnabled";
         private const string PendingScanOffsetSettingName = "CameraBackupPendingScanOffset";
@@ -32,6 +33,7 @@ namespace LiveDrive.Services
         private const string ToastDiagnosticSettingName = "CameraBackupToastDiagnostic";
         private const int MaximumUploadedPaths = 1000;
         private const int MaximumPendingPaths = 100;
+        private const int MaximumDiagnosticEntries = 150;
 
         public bool IsScheduledBackupEnabled
         {
@@ -226,6 +228,49 @@ namespace LiveDrive.Services
             }
         }
 
+        public async Task<IReadOnlyList<string>> LoadDiagnosticsAsync()
+        {
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(DiagnosticLogFileName);
+                return (await FileIO.ReadLinesAsync(file)).ToList();
+            }
+            catch (FileNotFoundException)
+            {
+                return new List<string>();
+            }
+        }
+
+        public async Task AppendDiagnosticAsync(string eventName, string detail = null)
+        {
+            var entries = (await LoadDiagnosticsAsync()).ToList();
+            var entry = DateTimeOffset.Now.ToString("o") + " | " + eventName;
+            if (!string.IsNullOrEmpty(detail))
+            {
+                entry += " | " + SanitizeDiagnosticDetail(detail);
+            }
+            entries.Add(entry);
+            if (entries.Count > MaximumDiagnosticEntries)
+            {
+                entries.RemoveRange(0, entries.Count - MaximumDiagnosticEntries);
+            }
+
+            var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                DiagnosticLogFileName, CreationCollisionOption.ReplaceExisting);
+            await FileIO.WriteLinesAsync(file, entries);
+        }
+
+        public async Task ClearDiagnosticsAsync()
+        {
+            try
+            {
+                await (await ApplicationData.Current.LocalFolder.GetFileAsync(DiagnosticLogFileName)).DeleteAsync();
+            }
+            catch (FileNotFoundException)
+            {
+            }
+        }
+
         public void SaveLastResult(string result)
         {
             ApplicationData.Current.LocalSettings.Values[LastResultSettingName] = result;
@@ -292,6 +337,7 @@ namespace LiveDrive.Services
             ApplicationData.Current.LocalSettings.Values.Remove(ScheduledBackupEnabledSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(LastBackgroundActivationSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(PendingScanOffsetSettingName);
+            await ClearDiagnosticsAsync();
             try
             {
                 await (await ApplicationData.Current.LocalFolder.GetFileAsync(UploadedPathsFileName)).DeleteAsync();
@@ -336,6 +382,17 @@ namespace LiveDrive.Services
             {
                 return new List<string>();
             }
+        }
+
+        private static string SanitizeDiagnosticDetail(string detail)
+        {
+            const int MaximumLength = 240;
+            var sanitized = detail.Replace("\r", " ").Replace("\n", " ");
+            if (sanitized.Length > MaximumLength)
+            {
+                sanitized = sanitized.Substring(0, MaximumLength) + "…";
+            }
+            return sanitized;
         }
     }
 }
