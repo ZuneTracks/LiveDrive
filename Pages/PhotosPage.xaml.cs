@@ -45,6 +45,8 @@ namespace LiveDrive.Pages
         private PhotoAlbum _album;
         private PhotoCollection _collection;
         private bool _showVideos;
+        private FrameworkElement _lastHeldPhotoTile;
+        private DateTimeOffset _lastPhotoHoldStarted;
         private readonly DataTransferManager _shareManager;
         private StorageFile _shareFile;
         private string _shareTitle;
@@ -623,6 +625,8 @@ namespace LiveDrive.Pages
                 return;
             }
 
+            _lastHeldPhotoTile = tile;
+            _lastPhotoHoldStarted = DateTimeOffset.Now;
             ShowPhotoMenu(tile, item);
         }
 
@@ -630,6 +634,15 @@ namespace LiveDrive.Pages
         {
             e.Handled = true;
             var tile = sender as FrameworkElement;
+            if (ReferenceEquals(tile, _lastHeldPhotoTile))
+            {
+                _lastHeldPhotoTile = null;
+                if (DateTimeOffset.Now - _lastPhotoHoldStarted < TimeSpan.FromSeconds(2))
+                {
+                    return;
+                }
+            }
+
             var item = tile?.Tag as DriveItem;
             if (item == null)
             {
