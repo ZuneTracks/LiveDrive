@@ -176,6 +176,7 @@
     <Compile Include="Services\ClientConfiguration.cs" />
     <Compile Include="Services\CameraUploadHistoryStore.cs" />
     <Compile Include="Services\DriveClipboard.cs" />
+    <Compile Include="Services\DiagnosticsSettings.cs" />
     <Compile Include="Services\GraphClient.cs" />
     <Compile Include="Services\IGraphClient.cs" />
     <Compile Include="Services\ITokenStore.cs" />
