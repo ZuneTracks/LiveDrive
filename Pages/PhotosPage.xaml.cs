@@ -75,6 +75,46 @@ namespace LiveDrive.Pages
             await LoadPhotosAsync();
         }
 
+        private async void IndexDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var entries = await _services.PhotoIndexDiagnostics.LoadAsync();
+            var text = entries.Count == 0
+                ? "No Photos or Videos index diagnostic events have been recorded yet."
+                : string.Join(Environment.NewLine, entries);
+            var log = new TextBox
+            {
+                Text = text,
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = true,
+                Height = 360
+            };
+            var dialog = new ContentDialog
+            {
+                Title = "Photos and Videos index diagnostics",
+                Content = log,
+                PrimaryButtonText = entries.Count == 0 ? null : "Copy",
+                CloseButtonText = "Close"
+            };
+            if (entries.Count > 0 && await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                var package = new DataPackage();
+                package.SetText(text);
+                Clipboard.SetContent(package);
+                await PageFeedback.ShowInfoAsync("Photos and Videos index diagnostics copied.");
+            }
+            else if (entries.Count == 0)
+            {
+                await dialog.ShowAsync();
+            }
+        }
+
+        private async void ClearIndexDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _services.PhotoIndexDiagnostics.ClearAsync();
+            await PageFeedback.ShowInfoAsync("Photos and Videos index diagnostics cleared.");
+        }
+
         private void BackButton_Click(object sender, RoutedEventArgs e)
         {
             if (Frame.CanGoBack)
@@ -113,6 +153,10 @@ namespace LiveDrive.Pages
             }
             catch (Exception exception)
             {
+                await _services.PhotoIndexDiagnostics.AppendAsync(
+                    "Index refresh failed",
+                    exception.GetType().Name + " (0x" + exception.HResult.ToString("X8") + "): " +
+                    exception.Message);
                 await PageFeedback.ShowErrorAsync(exception);
             }
         }
@@ -305,25 +349,49 @@ namespace LiveDrive.Pages
                 var indexedPhotos = snapshot.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
                 var hasVisiblePhotos = Photos.Count > 0;
                 var lastPublished = DateTimeOffset.UtcNow;
+                await _services.PhotoIndexDiagnostics.AppendAsync(
+                    "Index refresh started",
+                    snapshot.SourceFolders.Count + " source folder(s), " + indexedPhotos.Count + " cached item(s).");
 
                 foreach (var source in snapshot.SourceFolders)
                 {
                     var nextLink = source.DeltaLink;
                     string deltaLink = null;
+                    var pageCount = 0;
+                    var deltaItemCount = 0;
+                    var videoItemCount = 0;
+                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                        "Source delta started",
+                        source.Name + " (cached link: " + (!string.IsNullOrEmpty(nextLink)) + ").");
                     do
                     {
                         var page = await _services.Graph.GetPhotoDeltaPageAsync(nextLink, source.Id);
+                        pageCount++;
                         foreach (var item in page.Items)
                         {
+                            deltaItemCount++;
                             if (item.IsDeleted)
                             {
-                                if (indexedPhotos.Remove(item.Id))
+                                var removed = indexedPhotos.Remove(item.Id);
+                                await _services.PhotoIndexDiagnostics.AppendAsync(
+                                    "Delta deletion",
+                                    source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
+                                    "] was " + (removed ? "removed from" : "not found in") + " the index.");
+                                if (removed)
                                 {
                                     await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
                                 }
                             }
                             else if (IsMediaFile(item))
                             {
+                                if (IsVideoFile(item))
+                                {
+                                    videoItemCount++;
+                                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                                        "Delta video indexed",
+                                        source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
+                                        "], MIME: " + GetDiagnosticMimeType(item.MimeType) + ".");
+                                }
                                 DriveItem existingItem;
                                 if (indexedPhotos.TryGetValue(item.Id, out existingItem))
                                 {
@@ -342,6 +410,13 @@ namespace LiveDrive.Pages
                             }
                             else
                             {
+                                if (VideoExtensions.Contains(Path.GetExtension(item.Name)))
+                                {
+                                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                                        "Delta video ignored",
+                                        source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
+                                        "], MIME: " + GetDiagnosticMimeType(item.MimeType) + ".");
+                                }
                                 if (indexedPhotos.Remove(item.Id))
                                 {
                                     await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
@@ -375,11 +450,20 @@ namespace LiveDrive.Pages
                     {
                         source.DeltaLink = deltaLink;
                     }
+
+                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                        "Source delta completed",
+                        source.Name + ": " + pageCount + " page(s), " + deltaItemCount +
+                        " item(s), " + videoItemCount + " video item(s).");
                 }
 
                 RenderPhotos(FilterPhotos(indexedPhotos.Values));
                 LoadingPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 await _services.PhotoIndex.SaveAsync(indexedPhotos.Values, snapshot.SourceFolders);
+                await _services.PhotoIndexDiagnostics.AppendAsync(
+                    "Index refresh completed",
+                    indexedPhotos.Count + " media item(s), " +
+                    indexedPhotos.Values.Count(IsVideoFile) + " video item(s).");
                 EmptyPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception exception)
@@ -1231,6 +1315,21 @@ namespace LiveDrive.Pages
 
             return !item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
                 VideoExtensions.Contains(Path.GetExtension(item.Name));
+        }
+
+        private static string GetDiagnosticItemId(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId))
+            {
+                return "no ID";
+            }
+
+            return itemId.Length <= 8 ? itemId : itemId.Substring(itemId.Length - 8);
+        }
+
+        private static string GetDiagnosticMimeType(string mimeType)
+        {
+            return string.IsNullOrEmpty(mimeType) ? "none" : mimeType;
         }
 
         private async void PhotosGrid_ItemClick(object sender, ItemClickEventArgs e)

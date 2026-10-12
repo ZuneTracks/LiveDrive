@@ -58,6 +58,10 @@
             <CommandBar.SecondaryCommands>
                 <AppBarButton x:Name="RemoveFromAlbumButton" Icon="Remove" Label="Remove from album"
                               IsEnabled="False" Visibility="Collapsed" Click="RemoveFromAlbumButton_Click"/>
+                <AppBarButton x:Name="IndexDiagnosticsButton" Label="Index diagnostics"
+                              Click="IndexDiagnosticsButton_Click"/>
+                <AppBarButton x:Name="ClearIndexDiagnosticsButton" Label="Clear index diagnostics"
+                              Click="ClearIndexDiagnosticsButton_Click"/>
             </CommandBar.SecondaryCommands>
         </CommandBar>
         <Grid Grid.Row="3">

@@ -20,9 +20,9 @@ All notable user-facing changes are documented here.
 - Camera Backup now keeps a privacy-safe rolling diagnostic log of background
   activations, lock contention, upload progress, cancellation, and failures. The log
   can be copied or cleared from the Camera Backup page.
-- Camera Backup now shows each active upload's percentage beside its filename, including
-  when using **Check Camera Roll now**. Manual queue uploads show this percentage in the
-  existing overall progress panel rather than duplicating it on each queue row.
+- **Check Camera Roll now** shows each active upload's percentage beside its filename.
+- Photos and Videos now provide a copyable index diagnostic log that records delta-sync
+  source folders, video classifications, deletions, and resulting index counts.
 
 ### Fixes
 
@@ -30,6 +30,8 @@ All notable user-facing changes are documented here.
 - Removed selected-media queue separators that resembled empty progress bars.
 - Manual uploads now hide the active queue row, avoiding a duplicate filename beneath the
   overall progress panel while leaving later queued files visible.
+- Manual upload progress no longer repeats a percentage in its heading, preventing long
+  filenames from truncating the status text.
 - Large Camera Roll uploads now use Mobile-sized resumable-upload chunks instead of
   attempting multi-megabyte requests that can exceed the Windows 10 Mobile background
   execution budget.

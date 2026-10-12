@@ -8,6 +8,7 @@ namespace LiveDrive.Services
             Auth = new OAuthService(TokenStore);
             Graph = new GraphClient(Auth);
             PhotoIndex = new PhotoIndexStore();
+            PhotoIndexDiagnostics = new PhotoIndexDiagnostics();
             Thumbnails = new ThumbnailCacheService(PhotoIndex, Graph);
             Albums = new PhotoAlbumService(Graph);
             LiveTile = new LiveTileService(Graph, PhotoIndex, Albums);
@@ -22,6 +23,7 @@ namespace LiveDrive.Services
         public OAuthService Auth { get; }
         public IGraphClient Graph { get; }
         public PhotoIndexStore PhotoIndex { get; }
+        public PhotoIndexDiagnostics PhotoIndexDiagnostics { get; }
         public ThumbnailCacheService Thumbnails { get; }
         public PhotoAlbumService Albums { get; }
         public LiveTileService LiveTile { get; }
