@@ -36,6 +36,9 @@ namespace LiveDrive.Pages
                 _isInitializingScheduledBackup = false;
                 ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                 UpdateLastCameraRollScanStatus();
+                BackupDiagnosticsPanel.Visibility = DiagnosticsSettings.ShowTools
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
                 await LoadRecentlyUploadedAsync();
             };
         }

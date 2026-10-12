@@ -23,6 +23,9 @@ All notable user-facing changes are documented here.
 - **Check Camera Roll now** shows each active upload's percentage beside its filename.
 - Photos and Videos now provide a copyable index diagnostic log that records delta-sync
   source folders, video classifications, deletions, and resulting index counts.
+- A persisted Settings toggle now hides diagnostic controls by default and reveals the
+  Camera Backup, Photos/Videos index, and toast-notification troubleshooting tools only
+  when needed.
 
 ### Fixes
 

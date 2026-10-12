@@ -21,6 +21,7 @@ namespace LiveDrive.Pages
             _services = ((App)Application.Current).Services;
             _isInitializing = true;
             ThemeToggle.IsOn = ((App)Application.Current).CurrentTheme == ApplicationTheme.Dark;
+            DiagnosticsToolsToggle.IsOn = DiagnosticsSettings.ShowTools;
             _isInitializing = false;
             ThemeStatus.Text = "Theme changes take effect the next time LiveDrive starts.";
             Loaded += async (sender, args) =>
@@ -33,6 +34,7 @@ namespace LiveDrive.Pages
                 NotificationDiagnosticStatus.Text = string.IsNullOrEmpty(_services.CameraBackupState.GetToastDiagnostic())
                     ? "No notification diagnostic has run yet."
                     : _services.CameraBackupState.GetToastDiagnostic();
+                UpdateDiagnosticsToolsVisibility();
             };
         }
 
@@ -200,6 +202,24 @@ namespace LiveDrive.Pages
                 ThemeStatus.Text = "Theme saved. Close and reopen LiveDrive to apply it.";
                 await PageFeedback.ShowInfoAsync("Theme saved. Close and reopen LiveDrive to apply it.");
             }
+        }
+
+        private void DiagnosticsToolsToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing)
+            {
+                return;
+            }
+
+            DiagnosticsSettings.ShowTools = DiagnosticsToolsToggle.IsOn;
+            UpdateDiagnosticsToolsVisibility();
+        }
+
+        private void UpdateDiagnosticsToolsVisibility()
+        {
+            NotificationDiagnosticsSection.Visibility = DiagnosticsSettings.ShowTools
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private void NotificationDiagnosticButton_Click(object sender, RoutedEventArgs e)

@@ -267,6 +267,12 @@ namespace LiveDrive.Pages
                 : Visibility.Collapsed;
             AlbumInfoText.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
             RemoveFromAlbumButton.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
+            IndexDiagnosticsButton.Visibility = DiagnosticsSettings.ShowTools
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            ClearIndexDiagnosticsButton.Visibility = DiagnosticsSettings.ShowTools
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             SetEmptyMessage();
             base.OnNavigatedTo(e);
         }
