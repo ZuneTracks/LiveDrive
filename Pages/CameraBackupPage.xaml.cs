@@ -256,11 +256,15 @@ namespace LiveDrive.Pages
                         continue;
                     }
 
-                    Queue[0].Status = "Uploading";
+                    var queueItem = Queue[0];
+                    queueItem.Status = "Uploading";
+                    queueItem.Progress = 0;
+                    queueItem.ProgressVisibility = Visibility.Visible;
                     UploadProgressText.Text = "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + file.Name;
                     var progress = new DelegateProgress<double>(value =>
                     {
                         UploadProgress.Value = (completedFiles + value) / totalFiles;
+                        queueItem.Progress = value;
                     });
                     try
                     {
@@ -276,6 +280,8 @@ namespace LiveDrive.Pages
                         skippedFiles++;
                         continue;
                     }
+                    queueItem.Progress = 1;
+                    queueItem.ProgressVisibility = Visibility.Collapsed;
                     await _services.CameraBackupState.MarkUploadedAsync(file.Path);
                     await _services.CameraUploadHistory.AddAsync(file.Name);
                     existingNames.Add(file.Name);
