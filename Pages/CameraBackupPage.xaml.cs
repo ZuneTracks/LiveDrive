@@ -9,6 +9,7 @@ using LiveDrive.Models;
 using LiveDrive.Services;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
@@ -108,6 +109,46 @@ namespace LiveDrive.Pages
         private async void CheckCameraRollButton_Click(object sender, RoutedEventArgs e)
         {
             await CheckCameraRollAsync();
+        }
+
+        private async void BackupDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var entries = await _services.CameraBackupState.LoadDiagnosticsAsync();
+            var text = entries.Count == 0
+                ? "No Camera Backup diagnostic events have been recorded yet."
+                : string.Join(Environment.NewLine, entries);
+            var log = new TextBox
+            {
+                Text = text,
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = true,
+                Height = 360
+            };
+            var dialog = new ContentDialog
+            {
+                Title = "Camera Backup diagnostics",
+                Content = log,
+                PrimaryButtonText = entries.Count == 0 ? null : "Copy",
+                CloseButtonText = "Close"
+            };
+            if (entries.Count > 0 && await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                var package = new DataPackage();
+                package.SetText(text);
+                Clipboard.SetContent(package);
+                await PageFeedback.ShowInfoAsync("Camera Backup diagnostics copied.");
+            }
+            else if (entries.Count == 0)
+            {
+                await dialog.ShowAsync();
+            }
+        }
+
+        private async void ClearDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _services.CameraBackupState.ClearDiagnosticsAsync();
+            await PageFeedback.ShowInfoAsync("Camera Backup diagnostics cleared.");
         }
 
         private async Task CheckCameraRollAsync()

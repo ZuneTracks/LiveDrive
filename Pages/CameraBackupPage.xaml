@@ -24,6 +24,12 @@
             <Button x:Name="CheckCameraRollButton" Content="Check Camera Roll now"
                     Click="CheckCameraRollButton_Click" HorizontalAlignment="Left"
                     Margin="0,0,0,12" Style="{StaticResource LiveDriveSecondaryButtonStyle}"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <Button Content="Backup diagnostics" Click="BackupDiagnosticsButton_Click"
+                        Style="{StaticResource LiveDriveQuietButtonStyle}"/>
+                <Button Content="Clear diagnostics" Click="ClearDiagnosticsButton_Click" Margin="8,0,0,0"
+                        Style="{StaticResource LiveDriveQuietButtonStyle}"/>
+            </StackPanel>
             <Grid Margin="0,0,0,12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
