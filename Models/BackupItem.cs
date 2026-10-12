@@ -9,6 +9,7 @@ namespace LiveDrive.Models
         private string _status;
         private double _progress;
         private Visibility _progressVisibility = Visibility.Collapsed;
+        private string _progressLabel;
 
         public string Status
         {
@@ -45,6 +46,19 @@ namespace LiveDrive.Models
                 {
                     _progressVisibility = value;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProgressVisibility)));
+                }
+            }
+        }
+
+        public string ProgressLabel
+        {
+            get { return _progressLabel; }
+            set
+            {
+                if (_progressLabel != value)
+                {
+                    _progressLabel = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProgressLabel)));
                 }
             }
         }
