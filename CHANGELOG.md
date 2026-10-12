@@ -27,6 +27,7 @@ All notable user-facing changes are documented here.
 ### Fixes
 
 - Fixed photo and video long-press menus opening twice on Windows 10 Mobile after release.
+- Removed selected-media queue separators that resembled empty progress bars.
 - Large Camera Roll uploads now use Mobile-sized resumable-upload chunks instead of
   attempting multi-megabyte requests that can exceed the Windows 10 Mobile background
   execution budget.
