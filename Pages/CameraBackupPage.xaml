@@ -61,7 +61,12 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="{x:Bind Name}" FontSize="16" TextTrimming="CharacterEllipsis"/>
+                            <StackPanel>
+                                <TextBlock Text="{x:Bind Name}" FontSize="16" TextTrimming="CharacterEllipsis"/>
+                                <ProgressBar Minimum="0" Maximum="1" Value="{x:Bind Progress, Mode=OneWay}"
+                                             Visibility="{x:Bind ProgressVisibility, Mode=OneWay}"
+                                             Height="4" Margin="0,6,0,0"/>
+                            </StackPanel>
                             <TextBlock Grid.Column="1" Text="{x:Bind Status}" Style="{StaticResource LiveDriveMutedTextStyle}"
                                        VerticalAlignment="Center"/>
                             <Button Grid.Column="2" Content="X" Click="RemoveQueueItemButton_Click" Margin="8,0,0,0"
