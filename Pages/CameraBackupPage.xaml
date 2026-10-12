@@ -54,7 +54,7 @@
             <ListView ItemsSource="{x:Bind Queue}">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:BackupItem">
-                        <Border Style="{StaticResource LiveDriveListRowStyle}">
+                        <Border Background="Transparent" Padding="0,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
