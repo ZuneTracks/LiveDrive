@@ -21,8 +21,8 @@ All notable user-facing changes are documented here.
   activations, lock contention, upload progress, cancellation, and failures. The log
   can be copied or cleared from the Camera Backup page.
 - Camera Backup now shows each active upload's percentage beside its filename, including
-  when using **Check Camera Roll now**. Manual queue uploads also retain their individual
-  progress indicator and overall upload progress.
+  when using **Check Camera Roll now**. Manual queue uploads show this percentage in the
+  existing overall progress panel rather than duplicating it on each queue row.
 
 ### Fixes
 
