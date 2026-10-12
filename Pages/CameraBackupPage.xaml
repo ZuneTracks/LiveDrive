@@ -46,8 +46,7 @@
                 <Button x:Name="RecentlyUploadedButton" Grid.Row="1" Content="Recently uploaded" Click="RecentlyUploadedButton_Click"
                         HorizontalAlignment="Left" Margin="0,6,0,0" Style="{StaticResource LiveDriveQuietButtonStyle}"/>
             </Grid>
-            <StackPanel x:Name="UploadProgressPanel" Background="{ThemeResource CalloutBackgroundBrush}"
-                        Padding="12" Visibility="Collapsed" Margin="0,0,0,12">
+            <StackPanel x:Name="UploadProgressPanel" Visibility="Collapsed" Margin="0,0,0,12">
                 <TextBlock x:Name="UploadProgressText" Text="Preparing upload…" Margin="0,0,0,6"/>
                 <ProgressBar x:Name="UploadProgress" Minimum="0" Maximum="1" Value="0"/>
             </StackPanel>
