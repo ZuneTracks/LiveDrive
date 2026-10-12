@@ -388,8 +388,7 @@ namespace LiveDrive.Pages
         private static string GetManualUploadProgressText(
             int completedFiles, int totalFiles, string fileName, double progress)
         {
-            return "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + fileName +
-                " (" + Math.Round(progress * 100) + "% uploaded)";
+            return "Uploading " + (completedFiles + 1) + " of " + totalFiles + ": " + fileName;
         }
     }
 }
