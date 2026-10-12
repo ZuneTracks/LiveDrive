@@ -102,10 +102,15 @@ namespace LiveDrive.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 attemptedCount++;
-                progress?.Report("Uploading " + file.Name + "…");
+                progress?.Report(FormatUploadProgress(file.Name, 0));
                 try
                 {
-                    await _graph.UploadAsync(destination.Id, file, null, false, true);
+                    await _graph.UploadAsync(
+                        destination.Id,
+                        file,
+                        new Progress<double>(value => progress?.Report(FormatUploadProgress(file.Name, value))),
+                        false,
+                        true);
                 }
                 catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
                 {
@@ -222,8 +227,10 @@ namespace LiveDrive.Services
                                 "Large upload advanced", file.Name + " at " + result.Session.NextOffset +
                                 " of " + properties.Size + " bytes.");
                             _state.SaveLastResult(
-                                "Continued " + file.Name + " from " + result.Session.NextOffset + " of " +
-                                properties.Size + " bytes. It will continue at the next scheduled check.");
+                                FormatUploadProgress(
+                                    file.Name,
+                                    (double)result.Session.NextOffset / properties.Size) +
+                                " It will continue at the next scheduled check.");
                             return 0;
                         }
 
@@ -327,6 +334,12 @@ namespace LiveDrive.Services
                 message = message.Substring(0, MaximumMessageLength) + "…";
             }
             return fileName + ": " + message;
+        }
+
+        private static string FormatUploadProgress(string fileName, double progress)
+        {
+            var percentage = Math.Max(0, Math.Min(100, (int)Math.Round(progress * 100)));
+            return "Uploading " + fileName + " (" + percentage + "% uploaded)…";
         }
 
         private static async Task<IReadOnlyList<StorageFile>> GetCameraRollFilesAsync(CancellationToken cancellationToken,
