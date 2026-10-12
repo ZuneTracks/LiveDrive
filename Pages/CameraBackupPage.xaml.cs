@@ -258,6 +258,7 @@ namespace LiveDrive.Pages
 
                     var queueItem = Queue[0];
                     queueItem.Status = "Uploading";
+                    queueItem.QueueVisibility = Visibility.Collapsed;
                     UploadProgressText.Text = GetManualUploadProgressText(
                         completedFiles, totalFiles, file.Name, 0);
                     var progress = new DelegateProgress<double>(value =>
@@ -309,6 +310,7 @@ namespace LiveDrive.Pages
                 if (Queue.Count > 0)
                 {
                     Queue[0].Status = "Upload failed";
+                    Queue[0].QueueVisibility = Visibility.Visible;
                 }
                 await PageFeedback.ShowErrorAsync(exception);
             }

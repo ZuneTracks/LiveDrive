@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.UI.Xaml;
 
 namespace LiveDrive.Models
 {
@@ -6,6 +7,7 @@ namespace LiveDrive.Models
     {
         public string Name { get; set; }
         private string _status;
+        private Visibility _queueVisibility = Visibility.Visible;
 
         public string Status
         {
@@ -16,6 +18,19 @@ namespace LiveDrive.Models
                 {
                     _status = value;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Status)));
+                }
+            }
+        }
+
+        public Visibility QueueVisibility
+        {
+            get { return _queueVisibility; }
+            set
+            {
+                if (_queueVisibility != value)
+                {
+                    _queueVisibility = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueueVisibility)));
                 }
             }
         }
