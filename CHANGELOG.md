@@ -26,6 +26,8 @@ All notable user-facing changes are documented here.
 - A persisted Settings toggle now hides diagnostic controls by default and reveals the
   Camera Backup, Photos/Videos index, and toast-notification troubleshooting tools only
   when needed.
+- The About flyout now places the build number beneath the app name and links the
+  ZuneTracks attribution directly to the project GitHub page.
 
 ### Fixes
 
