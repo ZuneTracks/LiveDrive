@@ -250,22 +250,27 @@ namespace LiveDrive.Pages
                 FontWeight = Windows.UI.Text.FontWeights.SemiLight
             });
             content.Children.Add(CreateAboutTextBlock(
+                string.Format("Build {0}.{1}.{2}.{3}", version.Major, version.Minor, version.Build, version.Revision),
+                new Thickness(0, 2, 0, 0)));
+            content.Children.Add(CreateAboutTextBlock(
                 "An independent, phone-friendly UWP client for accessing your OneDrive through Microsoft Graph on Windows 10 Mobile.",
-                new Thickness(0, 10, 0, 0)));
+                new Thickness(0, 16, 0, 0)));
             content.Children.Add(CreateAboutTextBlock(
                 "LiveDrive is not affiliated with Microsoft or any Microsoft subsidiaries.",
                 new Thickness(0, 10, 0, 0)));
-            content.Children.Add(CreateAboutTextBlock(
-                string.Format("Build {0}.{1}.{2}.{3}", version.Major, version.Minor, version.Build, version.Revision),
-                new Thickness(0, 10, 0, 0)));
-            content.Children.Add(CreateAboutTextBlock("Developed by ZuneTracks", new Thickness(0, 10, 0, 0)));
-            content.Children.Add(new HyperlinkButton
+            var attribution = new StackPanel
             {
-                Content = "github.com/ZuneTracks",
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            attribution.Children.Add(new TextBlock { Text = "Developed by " });
+            attribution.Children.Add(new HyperlinkButton
+            {
+                Content = "ZuneTracks",
                 NavigateUri = new Uri("https://github.com/ZuneTracks"),
-                Padding = new Thickness(0),
-                Margin = new Thickness(0, 4, 0, 0)
+                Padding = new Thickness(0)
             });
+            content.Children.Add(attribution);
 
             var flyout = new Flyout { Content = content };
             flyout.ShowAt(AboutButton);
