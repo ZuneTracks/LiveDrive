@@ -268,7 +268,8 @@ namespace LiveDrive.Pages
             {
                 Content = "ZuneTracks",
                 NavigateUri = new Uri("https://github.com/ZuneTracks"),
-                Padding = new Thickness(0)
+                Padding = new Thickness(0),
+                Margin = new Thickness(4, 0, 0, 0)
             });
             content.Children.Add(attribution);
 
