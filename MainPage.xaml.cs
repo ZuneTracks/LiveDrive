@@ -103,6 +103,7 @@ namespace LiveDrive
             }
             else if (destination == "Settings")
             {
+                NavigationList.SelectedItem = null;
                 ContentFrame.Navigate(typeof(SettingsPage));
             }
 
