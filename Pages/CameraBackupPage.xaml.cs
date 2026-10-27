@@ -117,9 +117,14 @@ namespace LiveDrive.Pages
         private async void BackupDiagnosticsButton_Click(object sender, RoutedEventArgs e)
         {
             var entries = await _services.CameraBackupState.LoadDiagnosticsAsync();
-            var text = entries.Count == 0
-                ? "No Camera Backup diagnostic events have been recorded yet."
-                : string.Join(Environment.NewLine, entries);
+            if (entries.Count == 0)
+            {
+                await PageFeedback.ShowInfoAsync(
+                    "No Camera Backup diagnostic events have been recorded yet.");
+                return;
+            }
+
+            var text = string.Join(Environment.NewLine, entries);
             var log = new TextBox
             {
                 Text = text,
@@ -132,19 +137,15 @@ namespace LiveDrive.Pages
             {
                 Title = "Camera Backup diagnostics",
                 Content = log,
-                PrimaryButtonText = entries.Count == 0 ? null : "Copy",
+                PrimaryButtonText = "Copy",
                 CloseButtonText = "Close"
             };
-            if (entries.Count > 0 && await dialog.ShowAsync() == ContentDialogResult.Primary)
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
                 var package = new DataPackage();
                 package.SetText(text);
                 Clipboard.SetContent(package);
                 await PageFeedback.ShowInfoAsync("Camera Backup diagnostics copied.");
-            }
-            else if (entries.Count == 0)
-            {
-                await dialog.ShowAsync();
             }
         }
 

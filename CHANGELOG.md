@@ -31,6 +31,7 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Fixed Camera Backup diagnostics crashing when opened after the log is cleared.
 - Fixed navigation items not reopening their pages after visiting Account & Settings.
 - Fixed photo and video long-press menus opening twice on Windows 10 Mobile after release.
 - Removed selected-media queue separators that resembled empty progress bars.
