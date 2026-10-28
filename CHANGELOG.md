@@ -33,6 +33,7 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Camera Backup now reports network-originated cancellation as a retryable pause instead of displaying a raw `TaskCanceledException` resource key.
 - Scheduled Camera Backup now keeps temporarily unavailable Camera Roll files queued and retries them with a capped backoff instead of discarding them.
 - Fixed Camera Backup diagnostics crashing when opened after the log is cleared.
 - Fixed navigation items not reopening their pages after visiting Account & Settings.

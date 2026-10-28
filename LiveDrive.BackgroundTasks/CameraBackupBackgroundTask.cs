@@ -58,14 +58,19 @@ namespace LiveDrive.BackgroundTasks
                     SubmitCompletionToast(state, uploadedCount);
                 }
             }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            catch (OperationCanceledException exception)
             {
                 var reason = getCancellationReason();
                 state.SaveLastResult(
-                    "Background Camera Roll backup paused (" +
-                    (reason.HasValue ? reason.Value.ToString() : "unknown reason") + ").");
+                    reason.HasValue
+                        ? "Background Camera Roll backup paused (" + reason.Value + "). It will retry later."
+                        : "Background Camera Roll backup was interrupted by Windows or the network. " +
+                          "Queued items remain and will retry later.");
                 await state.AppendDiagnosticAsync(
-                    "Background task cancelled", reason.HasValue ? reason.Value.ToString() : "Unknown reason");
+                    "Background task cancelled",
+                    reason.HasValue
+                        ? reason.Value.ToString()
+                        : exception.GetType().Name + " without a Windows cancellation signal.");
             }
             catch (Exception exception)
             {
