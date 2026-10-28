@@ -6,7 +6,10 @@ namespace LiveDrive.Models
         public string MonthKey { get; set; }
         public bool IsOnThisDay { get; set; }
         public int Count { get; set; }
+        public string ItemType { get; set; } = "photo";
 
-        public string CountLabel => Count == 1 ? "1 photo" : Count + " photos";
+        public string CountLabel => Count == 1
+            ? "1 " + ItemType
+            : Count + " " + ItemType + "s";
     }
 }

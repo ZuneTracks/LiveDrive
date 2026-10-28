@@ -14,6 +14,15 @@
                            TextTrimming="CharacterEllipsis"/>
             </Border>
         </DataTemplate>
+        <DataTemplate x:Key="MonthNavigationItemTemplate">
+            <Border Padding="12,10">
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" FontSize="17"/>
+                    <TextBlock Text="{Binding CountLabel}"
+                               Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
     </Page.Resources>
     <Grid Padding="16">
         <Grid.RowDefinitions>
@@ -52,6 +61,8 @@
                     </MenuFlyout>
                 </AppBarButton.Flyout>
             </AppBarButton>
+            <AppBarButton x:Name="DateNavigationButton" Icon="Calendar" Label="Jump to date"
+                          Click="DateNavigationButton_Click"/>
             <AppBarButton x:Name="AddToAlbumButton" Icon="Add" Label="Add to album" IsEnabled="False" Click="AddToAlbumButton_Click"/>
             <AppBarButton x:Name="DeleteSelectedButton" Icon="Delete" Label="Delete" IsEnabled="False" Click="DeleteSelectedButton_Click"/>
             <AppBarButton Icon="Refresh" Label="Refresh" Click="RefreshButton_Click"/>
