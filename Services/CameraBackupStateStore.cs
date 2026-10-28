@@ -32,6 +32,8 @@ namespace LiveDrive.Services
         private const string LastResultSettingName = "CameraBackupLastResult";
         private const string LastScanStartedSettingName = "CameraBackupLastScanStarted";
         private const string LastBackgroundActivationSettingName = "CameraBackupLastBackgroundActivation";
+        private const string LastScheduledRegistrationRepairSettingName =
+            "CameraBackupLastScheduledRegistrationRepair";
         private const string ToastDiagnosticSettingName = "CameraBackupToastDiagnostic";
         private const int MaximumUploadedPaths = 1000;
         private const int MaximumPendingPaths = 100;
@@ -413,6 +415,23 @@ namespace LiveDrive.Services
                 : (DateTimeOffset?)null;
         }
 
+        public void SaveLastScheduledRegistrationRepair(DateTimeOffset timestamp)
+        {
+            ApplicationData.Current.LocalSettings.Values[LastScheduledRegistrationRepairSettingName] =
+                timestamp.ToString("o");
+        }
+
+        public DateTimeOffset? GetLastScheduledRegistrationRepair()
+        {
+            object value;
+            DateTimeOffset timestamp;
+            return ApplicationData.Current.LocalSettings.Values.TryGetValue(
+                LastScheduledRegistrationRepairSettingName, out value) &&
+                DateTimeOffset.TryParse(value as string, out timestamp)
+                ? timestamp
+                : (DateTimeOffset?)null;
+        }
+
         public void SaveToastDiagnostic(string result)
         {
             ApplicationData.Current.LocalSettings.Values[ToastDiagnosticSettingName] = result;
@@ -435,6 +454,7 @@ namespace LiveDrive.Services
             ApplicationData.Current.LocalSettings.Values.Remove(DestinationFolderIdSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(ScheduledBackupEnabledSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(LastBackgroundActivationSettingName);
+            ApplicationData.Current.LocalSettings.Values.Remove(LastScheduledRegistrationRepairSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(PendingScanOffsetSettingName);
             await ClearDiagnosticsAsync();
             try
