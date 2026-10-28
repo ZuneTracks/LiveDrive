@@ -196,18 +196,7 @@ namespace LiveDrive.Services
                 return false;
             }
 
-            var retryStates = (await LoadPendingRetryStatesAsync()).ToList();
-            retryStates.RemoveAll(state => string.Equals(
-                state.FilePath, path, StringComparison.OrdinalIgnoreCase));
             await SavePendingPathsAsync(pendingPaths);
-            await SavePendingRetryStatesAsync(retryStates);
-
-            var uploadSession = await LoadUploadSessionAsync();
-            if (uploadSession != null && string.Equals(
-                uploadSession.FilePath, path, StringComparison.OrdinalIgnoreCase))
-            {
-                await ClearUploadSessionAsync();
-            }
             return true;
         }
 
