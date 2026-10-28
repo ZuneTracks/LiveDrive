@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,11 @@ namespace LiveDrive.Pages
         private bool _isUpdatingScheduledBackup;
         private bool _hasPendingBackupStatusRefresh;
         private readonly DispatcherTimer _backupStatusRefreshTimer;
+        private readonly ObservableCollection<ScheduledBackupQueueItem> _scheduledQueueItems =
+            new ObservableCollection<ScheduledBackupQueueItem>();
+        private ScheduledBackupQueueItem _pendingScheduledQueueRemoval;
+        private StackPanel _scheduledQueueRemovalConfirmationPanel;
+        private TextBlock _scheduledQueueRemovalConfirmationText;
         public ObservableCollection<BackupItem> Queue { get; } = new ObservableCollection<BackupItem>();
         public ObservableCollection<BackupItem> RecentlyUploaded { get; } = new ObservableCollection<BackupItem>();
 
@@ -102,11 +108,13 @@ namespace LiveDrive.Pages
                         ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                     }
                     UpdateLastCameraRollScanStatus();
-                    var pendingPaths = await _services.CameraBackupState.LoadPendingPathsAsync();
-                    ScheduledQueueStatus.Text = pendingPaths.Count == 0
+                    var scheduledQueueItems = await LoadScheduledQueueItemsAsync();
+                    ScheduledQueueStatus.Content = scheduledQueueItems.Count == 0
                         ? "Scheduled backup queue is empty."
-                        : "Scheduled backup queue: " + pendingPaths.Count + " item" +
-                          (pendingPaths.Count == 1 ? " waiting." : "s waiting.");
+                        : "Scheduled backup queue: " + scheduledQueueItems.Count + " item" +
+                          (scheduledQueueItems.Count == 1 ? " waiting. View queue" : "s waiting. View queue");
+                    ScheduledQueueStatus.IsEnabled = scheduledQueueItems.Count > 0;
+                    UpdateBackupHealthStatus(scheduledQueueItems);
                     await LoadRecentlyUploadedAsync();
                 }
                 catch (Exception exception)
@@ -123,6 +131,249 @@ namespace LiveDrive.Pages
             }
             while (_hasPendingBackupStatusRefresh &&
                    !_isCheckingCameraRoll && !_isUploading && !_isUpdatingScheduledBackup);
+        }
+
+        private async Task<List<ScheduledBackupQueueItem>> LoadScheduledQueueItemsAsync()
+        {
+            var pendingPaths = await _services.CameraBackupState.LoadPendingPathsAsync();
+            var retryStates = await _services.CameraBackupState.LoadPendingRetryStatesAsync();
+            var retryStatesByPath = retryStates.ToDictionary(
+                state => state.FilePath, StringComparer.OrdinalIgnoreCase);
+            var uploadSession = await _services.CameraBackupState.LoadUploadSessionAsync();
+            var now = DateTimeOffset.UtcNow;
+            return pendingPaths.Select(path =>
+            {
+                CameraBackupRetryState retryState;
+                retryStatesByPath.TryGetValue(path, out retryState);
+                return new ScheduledBackupQueueItem
+                {
+                    Path = path,
+                    Name = Path.GetFileName(path),
+                    Status = GetScheduledQueueItemStatus(path, retryState, uploadSession, now),
+                    IsLargeUploadInProgress = uploadSession != null && string.Equals(
+                        uploadSession.FilePath, path, StringComparison.OrdinalIgnoreCase),
+                    IsAwaitingRetry = retryState != null && retryState.NextRetryUtc > now
+                };
+            }).ToList();
+        }
+
+        private static string GetScheduledQueueItemStatus(
+            string path, CameraBackupRetryState retryState,
+            CameraUploadSessionState uploadSession, DateTimeOffset now)
+        {
+            if (uploadSession != null && string.Equals(
+                uploadSession.FilePath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                var percentage = uploadSession.FileSize == 0
+                    ? 0
+                    : Math.Min(100, (int)Math.Round(
+                        (double)uploadSession.NextOffset * 100 / uploadSession.FileSize));
+                return "Large upload paused at " + percentage +
+                    "%; it will continue at the next scheduled check.";
+            }
+
+            if (retryState != null && retryState.NextRetryUtc > now)
+            {
+                return "Retry " + retryState.UnavailableCount + " after " +
+                    retryState.NextRetryUtc.ToLocalTime().ToString("g") + ".";
+            }
+
+            return retryState == null
+                ? "Waiting to upload."
+                : "Ready to retry (attempt " + retryState.UnavailableCount + ").";
+        }
+
+        private void UpdateBackupHealthStatus(IReadOnlyCollection<ScheduledBackupQueueItem> scheduledQueueItems)
+        {
+            if (!_services.CameraBackupScheduler.IsEnabled)
+            {
+                BackupHealthStatus.Text = "Scheduled backup is off.";
+                return;
+            }
+
+            if (!_services.CameraBackupScheduler.IsRegistered)
+            {
+                BackupHealthStatus.Text =
+                    "Action: leave scheduled backup on while LiveDrive restores its Windows task.";
+                return;
+            }
+
+            var largeUpload = scheduledQueueItems.FirstOrDefault(item => item.IsLargeUploadInProgress);
+            if (largeUpload != null)
+            {
+                BackupHealthStatus.Text =
+                    "Action: a resumable large upload is in progress. Windows continues it on later scheduled checks.";
+                return;
+            }
+
+            var deferredCount = scheduledQueueItems.Count(item => item.IsAwaitingRetry);
+            if (deferredCount > 0)
+            {
+                BackupHealthStatus.Text = "Action: " + deferredCount + " queued item" +
+                    (deferredCount == 1 ? " is" : "s are") +
+                    " waiting to retry. Open Scheduled backup queue to inspect or remove a stuck item.";
+                return;
+            }
+
+            var lastActivation = _services.CameraBackupState.GetLastBackgroundActivation();
+            if (!lastActivation.HasValue)
+            {
+                BackupHealthStatus.Text =
+                    "No background activation has been recorded yet. Windows runs scheduled backup when resources allow.";
+                return;
+            }
+
+            if (DateTimeOffset.Now - lastActivation.Value.ToLocalTime() > TimeSpan.FromHours(2))
+            {
+                BackupHealthStatus.Text =
+                    "No recent background activation was recorded. Windows may defer scheduled work; open the queue to review waiting items.";
+                return;
+            }
+
+            BackupHealthStatus.Text = scheduledQueueItems.Count == 0
+                ? "Scheduled backup is healthy; no Camera Roll items are waiting."
+                : "Scheduled backup is ready to process " + scheduledQueueItems.Count + " queued item" +
+                  (scheduledQueueItems.Count == 1 ? "." : "s.");
+        }
+
+        private async void ScheduledQueueStatus_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isCheckingCameraRoll || _isUploading || _isUpdatingScheduledBackup)
+            {
+                await PageFeedback.ShowInfoAsync(
+                    "Wait for the current Camera Roll operation to finish before changing the scheduled queue.");
+                return;
+            }
+
+            var items = await LoadScheduledQueueItemsAsync();
+            _scheduledQueueItems.Clear();
+            foreach (var item in items)
+            {
+                _scheduledQueueItems.Add(item);
+            }
+            if (_scheduledQueueItems.Count == 0)
+            {
+                await PageFeedback.ShowInfoAsync("The scheduled backup queue is empty.");
+                return;
+            }
+
+            var list = new ListView
+            {
+                ItemsSource = _scheduledQueueItems,
+                ItemTemplate = Resources["ScheduledQueueItemTemplate"] as DataTemplate,
+                SelectionMode = ListViewSelectionMode.None,
+                Height = 360
+            };
+            var content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = "Removing an item only stops LiveDrive from retrying it. " +
+                    "It does not delete the file from your device or OneDrive.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+            _scheduledQueueRemovalConfirmationPanel = new StackPanel
+            {
+                Visibility = Visibility.Collapsed,
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            _scheduledQueueRemovalConfirmationText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+            var confirmationButtons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            var confirmRemove = new Button
+            {
+                Content = "Remove"
+            };
+            confirmRemove.Click += ConfirmScheduledQueueItemRemoval_Click;
+            var cancelRemove = new Button
+            {
+                Content = "Cancel",
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            cancelRemove.Click += CancelScheduledQueueItemRemoval_Click;
+            confirmationButtons.Children.Add(confirmRemove);
+            confirmationButtons.Children.Add(cancelRemove);
+            _scheduledQueueRemovalConfirmationPanel.Children.Add(_scheduledQueueRemovalConfirmationText);
+            _scheduledQueueRemovalConfirmationPanel.Children.Add(confirmationButtons);
+            content.Children.Add(_scheduledQueueRemovalConfirmationPanel);
+            content.Children.Add(list);
+            await new ContentDialog
+            {
+                Title = "Scheduled backup queue",
+                Content = content,
+                CloseButtonText = "Close"
+            }.ShowAsync();
+            _pendingScheduledQueueRemoval = null;
+            _scheduledQueueRemovalConfirmationPanel = null;
+            _scheduledQueueRemovalConfirmationText = null;
+        }
+
+        private void RemoveScheduledQueueItemButton_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as FrameworkElement;
+            var item = button?.Tag as ScheduledBackupQueueItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            _pendingScheduledQueueRemoval = item;
+            _scheduledQueueRemovalConfirmationText.Text =
+                "Remove " + item.Name + " from the scheduled backup queue? " +
+                "This does not delete the file from your device or OneDrive.";
+            _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Visible;
+        }
+
+        private void CancelScheduledQueueItemRemoval_Click(object sender, RoutedEventArgs e)
+        {
+            _pendingScheduledQueueRemoval = null;
+            _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Collapsed;
+        }
+
+        private async void ConfirmScheduledQueueItemRemoval_Click(object sender, RoutedEventArgs e)
+        {
+            var item = _pendingScheduledQueueRemoval;
+            if (item == null)
+            {
+                return;
+            }
+
+            if (!await _services.CameraBackupState.TryAcquireBackgroundRunLockAsync())
+            {
+                _scheduledQueueRemovalConfirmationText.Text =
+                    "A scheduled Camera Roll check is active. Try removing this item again shortly.";
+                return;
+            }
+
+            try
+            {
+                if (await _services.CameraBackupState.RemovePendingPathAsync(item.Path))
+                {
+                    _scheduledQueueItems.Remove(item);
+                    await _services.CameraBackupState.AppendDiagnosticAsync(
+                        "Camera Roll queue item removed", item.Name);
+                    _services.CameraBackupState.SaveLastResult(
+                        "Removed " + item.Name + " from the scheduled Camera Roll queue.");
+                }
+            }
+            catch (Exception exception)
+            {
+                _scheduledQueueRemovalConfirmationText.Text =
+                    "Could not remove this queue item: " + exception.Message;
+                return;
+            }
+            finally
+            {
+                await _services.CameraBackupState.ReleaseBackgroundRunLockAsync();
+            }
+
+            _pendingScheduledQueueRemoval = null;
+            _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Collapsed;
+            await RefreshBackupStatusAsync();
         }
 
         private async void ScheduledBackupToggle_Toggled(object sender, RoutedEventArgs e)

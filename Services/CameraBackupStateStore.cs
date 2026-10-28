@@ -179,6 +179,36 @@ namespace LiveDrive.Services
             }
         }
 
+        public async Task<bool> RemovePendingPathAsync(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            var pendingPaths = (await LoadPendingPathsAsync()).ToList();
+            var removed = pendingPaths.RemoveAll(candidate =>
+                string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase)) > 0;
+            if (!removed)
+            {
+                return false;
+            }
+
+            var retryStates = (await LoadPendingRetryStatesAsync()).ToList();
+            retryStates.RemoveAll(state => string.Equals(
+                state.FilePath, path, StringComparison.OrdinalIgnoreCase));
+            await SavePendingPathsAsync(pendingPaths);
+            await SavePendingRetryStatesAsync(retryStates);
+
+            var uploadSession = await LoadUploadSessionAsync();
+            if (uploadSession != null && string.Equals(
+                uploadSession.FilePath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                await ClearUploadSessionAsync();
+            }
+            return true;
+        }
+
         public string GetDestinationFolderId()
         {
             object value;
