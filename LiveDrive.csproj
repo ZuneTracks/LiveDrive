@@ -145,6 +145,7 @@
     <Compile Include="Models\PhotoIndexSnapshot.cs" />
     <Compile Include="Models\PhotoSourceFolder.cs" />
     <Compile Include="Models\PhotoViewerRequest.cs" />
+    <Compile Include="Models\ScheduledBackupQueueItem.cs" />
     <Compile Include="Pages\AlbumsPage.xaml.cs">
       <DependentUpon>AlbumsPage.xaml</DependentUpon>
     </Compile>

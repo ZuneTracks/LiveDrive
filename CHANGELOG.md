@@ -6,6 +6,7 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Camera Backup diagnostics now summarize queue/retry health and provide a safe Scheduled backup queue viewer. Queued items can be removed after confirmation without deleting the device or OneDrive file.
 - Camera Backup now refreshes its scheduled queue count, last result, scan details, and recent-upload history whenever the page opens or LiveDrive resumes.
 - Photos and Videos now offer a Month/Year picker for jumping the current grid to a selected date range without changing the library or Collections.
 - Drive now offers persistent folder-first sorting by name, last modified date, or size.
