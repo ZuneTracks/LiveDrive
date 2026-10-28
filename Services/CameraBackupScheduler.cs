@@ -11,6 +11,8 @@ namespace LiveDrive.Services
         private const string InitialTaskName = "LiveDriveCameraBackupInitial";
         public const string TaskEntryPoint = "LiveDrive.BackgroundTasks.CameraBackupBackgroundTask";
         private const uint IntervalMinutes = 15;
+        private static readonly TimeSpan SilentActivationThreshold = TimeSpan.FromHours(2);
+        private static readonly TimeSpan RegistrationRepairInterval = TimeSpan.FromHours(6);
         private readonly CameraBackupStateStore _state;
 
         public CameraBackupScheduler(CameraBackupStateStore state)
@@ -62,6 +64,18 @@ namespace LiveDrive.Services
                 UnregisterTask(TaskName, false);
                 RegisterTask(TaskName, new TimeTrigger(IntervalMinutes, false));
             }
+            else if (!requestInitialRun && ShouldRepairSilentRegistration())
+            {
+                var lastActivation = _state.GetLastBackgroundActivation();
+                UnregisterTask(TaskName, false);
+                RegisterTask(TaskName, new TimeTrigger(IntervalMinutes, false));
+                _state.SaveLastScheduledRegistrationRepair(DateTimeOffset.Now);
+                _state.SaveLastResult(
+                    "Scheduled Camera Roll backup was re-registered after no background activation for over two hours.");
+                await _state.AppendDiagnosticAsync(
+                    "Scheduled backup registration repaired",
+                    "No background activation since " + lastActivation.Value.ToLocalTime().ToString("g") + ".");
+            }
 
             if (!requestInitialRun)
             {
@@ -72,6 +86,20 @@ namespace LiveDrive.Services
             var initialTrigger = new ApplicationTrigger();
             RegisterTask(InitialTaskName, initialTrigger);
             return await initialTrigger.RequestAsync();
+        }
+
+        private bool ShouldRepairSilentRegistration()
+        {
+            var lastActivation = _state.GetLastBackgroundActivation();
+            if (!lastActivation.HasValue ||
+                DateTimeOffset.Now - lastActivation.Value.ToLocalTime() <= SilentActivationThreshold)
+            {
+                return false;
+            }
+
+            var lastRepair = _state.GetLastScheduledRegistrationRepair();
+            return !lastRepair.HasValue ||
+                DateTimeOffset.Now - lastRepair.Value.ToLocalTime() >= RegistrationRepairInterval;
         }
 
         private static void RegisterTask(string name, IBackgroundTrigger trigger)

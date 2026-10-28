@@ -6,6 +6,9 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Scheduled Camera Backup now re-registers a timer that remains registered but has been
+  silent for more than two hours, with repair attempts rate-limited to once every six
+  hours.
 - Camera Backup diagnostics now summarize queue/retry health and provide a safe Scheduled backup queue viewer. Queued items can be removed after confirmation without deleting the device or OneDrive file.
 - Camera Backup now refreshes its scheduled queue count, last result, scan details, and recent-upload history whenever the page opens or LiveDrive resumes.
 - Photos and Videos now offer a Month/Year picker for jumping the current grid to a selected date range without changing the library or Collections.
@@ -34,6 +37,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Camera Backup now records the lock-acquisition checkpoint and handles failures in that
+  startup path, so an activation that stops before queue processing can be diagnosed.
 - Camera Backup now reports network-originated cancellation as a retryable pause instead of displaying a raw `TaskCanceledException` resource key.
 - Scheduled Camera Backup now keeps temporarily unavailable Camera Roll files queued and retries them with a capped backoff instead of discarding them.
 - Fixed Camera Backup diagnostics crashing when opened after the log is cleared.

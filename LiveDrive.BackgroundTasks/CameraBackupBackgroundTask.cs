@@ -29,28 +29,32 @@ namespace LiveDrive.BackgroundTasks
             Func<BackgroundTaskCancellationReason?> getCancellationReason)
         {
             var state = new CameraBackupStateStore();
-            var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
-            var backup = new CameraBackupService(graph, new CameraUploadHistoryStore(), state);
-            state.SaveLastBackgroundActivation(DateTimeOffset.Now);
-            await state.AppendDiagnosticAsync("Background task activated");
-            if (!state.IsScheduledBackupEnabled)
-            {
-                state.SaveLastResult("Ignored a Camera Roll background activation because scheduled backup is off.");
-                await state.AppendDiagnosticAsync("Background task ignored", "Scheduled backup is off.");
-                deferral.Complete();
-                cancellation.Dispose();
-                return;
-            }
-            if (!await state.TryAcquireBackgroundRunLockAsync())
-            {
-                await state.AppendDiagnosticAsync("Background task skipped", "Another Camera Roll task holds the lock.");
-                deferral.Complete();
-                cancellation.Dispose();
-                return;
-            }
+            var backgroundLockAcquired = false;
             try
             {
+                state.SaveLastBackgroundActivation(DateTimeOffset.Now);
+                await state.AppendDiagnosticAsync("Background task activated");
+                if (!state.IsScheduledBackupEnabled)
+                {
+                    state.SaveLastResult("Ignored a Camera Roll background activation because scheduled backup is off.");
+                    await state.AppendDiagnosticAsync("Background task ignored", "Scheduled backup is off.");
+                    return;
+                }
+
+                await state.AppendDiagnosticAsync("Background task acquiring lock");
+                backgroundLockAcquired = await state.TryAcquireBackgroundRunLockAsync();
+                if (!backgroundLockAcquired)
+                {
+                    state.SaveLastResult(
+                        "Scheduled Camera Roll backup is waiting for another Camera Roll operation to finish.");
+                    await state.AppendDiagnosticAsync(
+                        "Background task skipped", "Another Camera Roll task holds the lock.");
+                    return;
+                }
+
                 await state.AppendDiagnosticAsync("Background task lock acquired");
+                var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
+                var backup = new CameraBackupService(graph, new CameraUploadHistoryStore(), state);
                 var uploadedCount = await backup.UploadPendingCameraRollItemsAsync(cancellation.Token);
                 await state.AppendDiagnosticAsync("Background task completed", "Uploaded " + uploadedCount + " item(s).");
                 if (uploadedCount > 0)
@@ -84,7 +88,10 @@ namespace LiveDrive.BackgroundTasks
             }
             finally
             {
-                await state.ReleaseBackgroundRunLockAsync();
+                if (backgroundLockAcquired)
+                {
+                    await state.ReleaseBackgroundRunLockAsync();
+                }
                 cancellation.Dispose();
                 deferral.Complete();
             }

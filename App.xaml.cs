@@ -112,6 +112,7 @@ namespace LiveDrive
         private void OnResuming(object sender, object e)
         {
             Services.Thumbnails.Resume();
+            _ = RestoreCameraBackupRegistrationAsync();
         }
 
         private static ApplicationTheme ReadSavedTheme()
