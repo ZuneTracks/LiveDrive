@@ -33,6 +33,7 @@ namespace LiveDrive.Pages
         private ScheduledBackupQueueItem _pendingScheduledQueueRemoval;
         private StackPanel _scheduledQueueRemovalConfirmationPanel;
         private TextBlock _scheduledQueueRemovalConfirmationText;
+        private bool _isRemovingScheduledQueueItem;
         public ObservableCollection<BackupItem> Queue { get; } = new ObservableCollection<BackupItem>();
         public ObservableCollection<BackupItem> RecentlyUploaded { get; } = new ObservableCollection<BackupItem>();
 
@@ -301,22 +302,31 @@ namespace LiveDrive.Pages
             _scheduledQueueRemovalConfirmationPanel.Children.Add(confirmationButtons);
             content.Children.Add(_scheduledQueueRemovalConfirmationPanel);
             content.Children.Add(list);
-            await new ContentDialog
+            try
             {
-                Title = "Scheduled backup queue",
-                Content = content,
-                CloseButtonText = "Close"
-            }.ShowAsync();
-            _pendingScheduledQueueRemoval = null;
-            _scheduledQueueRemovalConfirmationPanel = null;
-            _scheduledQueueRemovalConfirmationText = null;
+                await new ContentDialog
+                {
+                    Title = "Scheduled backup queue",
+                    Content = content,
+                    CloseButtonText = "Close"
+                }.ShowAsync();
+            }
+            finally
+            {
+                _isRemovingScheduledQueueItem = false;
+                _pendingScheduledQueueRemoval = null;
+                _scheduledQueueRemovalConfirmationPanel = null;
+                _scheduledQueueRemovalConfirmationText = null;
+            }
         }
 
         private void RemoveScheduledQueueItemButton_Click(object sender, RoutedEventArgs e)
         {
             var button = sender as FrameworkElement;
             var item = button?.Tag as ScheduledBackupQueueItem;
-            if (item == null)
+            if (item == null ||
+                _scheduledQueueRemovalConfirmationText == null ||
+                _scheduledQueueRemovalConfirmationPanel == null)
             {
                 return;
             }
@@ -331,26 +341,40 @@ namespace LiveDrive.Pages
         private void CancelScheduledQueueItemRemoval_Click(object sender, RoutedEventArgs e)
         {
             _pendingScheduledQueueRemoval = null;
-            _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Collapsed;
+            if (_scheduledQueueRemovalConfirmationPanel != null)
+            {
+                _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Collapsed;
+            }
         }
 
         private async void ConfirmScheduledQueueItemRemoval_Click(object sender, RoutedEventArgs e)
         {
+            if (_isRemovingScheduledQueueItem)
+            {
+                return;
+            }
+
             var item = _pendingScheduledQueueRemoval;
-            if (item == null)
+            if (item == null ||
+                _scheduledQueueRemovalConfirmationText == null ||
+                _scheduledQueueRemovalConfirmationPanel == null)
             {
                 return;
             }
 
-            if (!await _services.CameraBackupState.TryAcquireBackgroundRunLockAsync())
-            {
-                _scheduledQueueRemovalConfirmationText.Text =
-                    "A scheduled Camera Roll check is active. Try removing this item again shortly.";
-                return;
-            }
-
+            var backgroundLockAcquired = false;
+            var itemRemoved = false;
+            _isRemovingScheduledQueueItem = true;
             try
             {
+                backgroundLockAcquired = await _services.CameraBackupState.TryAcquireBackgroundRunLockAsync();
+                if (!backgroundLockAcquired)
+                {
+                    SetScheduledQueueRemovalMessage(
+                        "A scheduled Camera Roll check is active. Try removing this item again shortly.");
+                    return;
+                }
+
                 if (await _services.CameraBackupState.RemovePendingPathAsync(item.Path))
                 {
                     _scheduledQueueItems.Remove(item);
@@ -358,22 +382,53 @@ namespace LiveDrive.Pages
                         "Camera Roll queue item removed", item.Name);
                     _services.CameraBackupState.SaveLastResult(
                         "Removed " + item.Name + " from the scheduled Camera Roll queue.");
+                    itemRemoved = true;
+                }
+                else
+                {
+                    SetScheduledQueueRemovalMessage(
+                        "This item is no longer in the scheduled backup queue.");
                 }
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                _scheduledQueueRemovalConfirmationText.Text =
-                    "Could not remove this queue item: " + exception.Message;
-                return;
+                SetScheduledQueueRemovalMessage(
+                    "Could not remove this queue item. Its queue state was not changed.");
             }
             finally
             {
-                await _services.CameraBackupState.ReleaseBackgroundRunLockAsync();
+                if (backgroundLockAcquired)
+                {
+                    try
+                    {
+                        await _services.CameraBackupState.ReleaseBackgroundRunLockAsync();
+                    }
+                    catch (Exception)
+                    {
+                        SetScheduledQueueRemovalMessage(
+                            "The item was updated, but LiveDrive could not release the backup lock yet.");
+                    }
+                }
+                _isRemovingScheduledQueueItem = false;
             }
 
-            _pendingScheduledQueueRemoval = null;
-            _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Collapsed;
-            await RefreshBackupStatusAsync();
+            if (itemRemoved)
+            {
+                _pendingScheduledQueueRemoval = null;
+                if (_scheduledQueueRemovalConfirmationPanel != null)
+                {
+                    _scheduledQueueRemovalConfirmationPanel.Visibility = Visibility.Collapsed;
+                }
+                await RefreshBackupStatusAsync();
+            }
+        }
+
+        private void SetScheduledQueueRemovalMessage(string message)
+        {
+            if (_scheduledQueueRemovalConfirmationText != null)
+            {
+                _scheduledQueueRemovalConfirmationText.Text = message;
+            }
         }
 
         private async void ScheduledBackupToggle_Toggled(object sender, RoutedEventArgs e)
