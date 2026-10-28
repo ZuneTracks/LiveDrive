@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Windows.Data.Json;
 using Windows.Storage;
 #if BACKGROUND_TASK
+using CameraBackupRetryState = LiveDrive.BackgroundTasks.CameraBackupRetryState;
 using CameraUploadSessionState = LiveDrive.BackgroundTasks.CameraUploadSessionState;
 #endif
 
@@ -21,6 +22,7 @@ namespace LiveDrive.Services
         private const string UploadedPathsSettingName = "CameraBackupUploadedPaths";
         private const string UploadedPathsFileName = "camera-backup-uploaded-paths.json";
         private const string PendingPathsFileName = "camera-backup-pending-paths.json";
+        private const string PendingRetryStatesFileName = "camera-backup-pending-retries.json";
         private const string BackgroundRunLockFileName = "camera-backup-background.lock";
         private const string UploadSessionFileName = "camera-backup-upload-session.json";
         private const string DiagnosticLogFileName = "camera-backup-diagnostics.log";
@@ -108,6 +110,73 @@ namespace LiveDrive.Services
             var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
                 PendingPathsFileName, CreationCollisionOption.ReplaceExisting);
             await FileIO.WriteTextAsync(file, values.Stringify());
+        }
+
+        public async Task<IReadOnlyList<CameraBackupRetryState>> LoadPendingRetryStatesAsync()
+        {
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(PendingRetryStatesFileName);
+                var states = new List<CameraBackupRetryState>();
+                foreach (var value in JsonArray.Parse(await FileIO.ReadTextAsync(file)))
+                {
+                    var json = value.GetObject();
+                    var filePath = json.GetNamedString("filePath", string.Empty);
+                    DateTimeOffset nextRetryUtc;
+                    if (string.IsNullOrEmpty(filePath) ||
+                        !DateTimeOffset.TryParse(
+                            json.GetNamedString("nextRetryUtc", string.Empty), out nextRetryUtc))
+                    {
+                        continue;
+                    }
+
+                    states.Add(new CameraBackupRetryState
+                    {
+                        FilePath = filePath,
+                        UnavailableCount = Math.Max(0, (int)json.GetNamedNumber("unavailableCount", 0)),
+                        NextRetryUtc = nextRetryUtc
+                    });
+                }
+                return states;
+            }
+            catch (FileNotFoundException)
+            {
+                return new List<CameraBackupRetryState>();
+            }
+        }
+
+        public async Task SavePendingRetryStatesAsync(IEnumerable<CameraBackupRetryState> states)
+        {
+            var distinctStates = states
+                .Where(state => state != null && !string.IsNullOrEmpty(state.FilePath))
+                .GroupBy(state => state.FilePath, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .Take(MaximumPendingPaths)
+                .ToList();
+            var values = new JsonArray();
+            foreach (var state in distinctStates)
+            {
+                var json = new JsonObject();
+                json.SetNamedValue("filePath", JsonValue.CreateStringValue(state.FilePath));
+                json.SetNamedValue("unavailableCount", JsonValue.CreateNumberValue(state.UnavailableCount));
+                json.SetNamedValue("nextRetryUtc", JsonValue.CreateStringValue(state.NextRetryUtc.ToString("o")));
+                values.Add(json);
+            }
+            var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                PendingRetryStatesFileName, CreationCollisionOption.ReplaceExisting);
+            await FileIO.WriteTextAsync(file, values.Stringify());
+        }
+
+        public async Task ClearPendingRetryStatesAsync()
+        {
+            try
+            {
+                await (await ApplicationData.Current.LocalFolder.GetFileAsync(
+                    PendingRetryStatesFileName)).DeleteAsync();
+            }
+            catch (FileNotFoundException)
+            {
+            }
         }
 
         public string GetDestinationFolderId()
@@ -353,6 +422,7 @@ namespace LiveDrive.Services
             catch (FileNotFoundException)
             {
             }
+            await ClearPendingRetryStatesAsync();
             try
             {
                 await (await ApplicationData.Current.LocalFolder.GetFileAsync(BackgroundRunLockFileName)).DeleteAsync();

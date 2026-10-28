@@ -31,6 +31,7 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Scheduled Camera Backup now keeps temporarily unavailable Camera Roll files queued and retries them with a capped backoff instead of discarding them.
 - Fixed Camera Backup diagnostics crashing when opened after the log is cleared.
 - Fixed navigation items not reopening their pages after visiting Account & Settings.
 - Fixed photo and video long-press menus opening twice on Windows 10 Mobile after release.
