@@ -37,6 +37,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Fixed the Camera Backup page crashing on Windows 10 Mobile when loading the Scheduled
+  backup queue link.
 - Camera Backup now records the lock-acquisition checkpoint and handles failures in that
   startup path, so an activation that stops before queue processing can be diagnosed.
 - Camera Backup now reports network-originated cancellation as a retryable pause instead of displaying a raw `TaskCanceledException` resource key.
