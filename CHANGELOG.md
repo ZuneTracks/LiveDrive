@@ -6,6 +6,8 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Large scheduled Camera Roll uploads now send several persisted 320 KiB chunks while
+  their background-time budget permits, instead of one chunk per activation.
 - Scheduled Camera Backup now re-registers a timer that remains registered but has been
   silent for more than two hours, with repair attempts rate-limited to once every six
   hours.
