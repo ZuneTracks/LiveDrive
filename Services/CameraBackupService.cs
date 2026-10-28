@@ -162,7 +162,10 @@ namespace LiveDrive.Services
         {
             _state.SaveLastScanStarted(DateTimeOffset.Now);
             var pendingPaths = (await _state.LoadPendingPathsAsync()).ToList();
-            await QueueRecentCameraRollFilesAsync(pendingPaths, cancellationToken);
+            if (pendingPaths.Count == 0)
+            {
+                await QueueRecentCameraRollFilesAsync(pendingPaths, cancellationToken);
+            }
             var retryStates = (await _state.LoadPendingRetryStatesAsync())
                 .ToDictionary(state => state.FilePath, StringComparer.OrdinalIgnoreCase);
             await _state.AppendDiagnosticAsync(
@@ -222,6 +225,25 @@ namespace LiveDrive.Services
                         "LiveDrive Camera Roll", cancellationToken);
                     destinationFolderId = destination.Id;
                     _state.SaveDestinationFolderId(destinationFolderId);
+                }
+
+                if (await _graph.ItemExistsAsync(destinationFolderId, file.Name, cancellationToken))
+                {
+                    if (uploadSession != null && string.Equals(
+                        uploadSession.FilePath, file.Path, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _state.ClearUploadSessionAsync();
+                        uploadSession = null;
+                    }
+                    await _state.MarkUploadedAsync(file.Path);
+                    await _state.AppendDiagnosticAsync(
+                        "Camera Roll item reconciled", file.Name + " already exists in OneDrive.");
+                    retryStates.Remove(path);
+                    RemovePendingPath(pendingPaths, path);
+                    await _state.SavePendingPathsAsync(pendingPaths);
+                    await _state.SavePendingRetryStatesAsync(retryStates.Values);
+                    skippedCount++;
+                    continue;
                 }
 
                 try
