@@ -36,7 +36,8 @@ namespace LiveDrive.Services
             CancellationToken cancellationToken = default(CancellationToken));
         Task<CameraUploadChunkResult> UploadLargeFileChunkAsync(
             string parentId, StorageFile file, CameraUploadSessionState session,
-            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken);
+            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken,
+            bool refreshSessionOffset = true);
         Task CopyAsync(DriveItem item, string destinationFolderId);
         Task MoveAsync(DriveItem item, string destinationFolderId);
         Task DeleteAsync(DriveItem item);

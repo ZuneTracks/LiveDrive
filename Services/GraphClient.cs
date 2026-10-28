@@ -331,7 +331,8 @@ namespace LiveDrive.Services
 
         public async Task<CameraUploadChunkResult> UploadLargeFileChunkAsync(
             string parentId, StorageFile file, CameraUploadSessionState session,
-            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken)
+            bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken,
+            bool refreshSessionOffset = true)
         {
             var properties = await file.GetBasicPropertiesAsync();
             if (properties.Size <= 4 * 1024 * 1024)
@@ -341,7 +342,7 @@ namespace LiveDrive.Services
 
             var modified = properties.DateModified.ToString("o");
             if (!CanResumeUploadSession(session, parentId, file.Path, properties.Size, modified) ||
-                !await TryRefreshUploadSessionOffsetAsync(session, cancellationToken))
+                (refreshSessionOffset && !await TryRefreshUploadSessionOffsetAsync(session, cancellationToken)))
             {
                 session = await CreateUploadSessionAsync(
                     parentId, file, properties.Size, modified, renameOnConflict, failOnConflict, cancellationToken);

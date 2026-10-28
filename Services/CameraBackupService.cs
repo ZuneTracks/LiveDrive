@@ -28,8 +28,10 @@ namespace LiveDrive.Services
         private const int MaximumUploadsPerBackgroundRun = 1;
         private const uint RecentFilesPerBackgroundRun = 12;
         private const int MaximumPendingPaths = 100;
+        private const int MaximumLargeUploadChunksPerBackgroundRun = 8;
         private const int InitialUnavailableRetryMinutes = 15;
         private const int MaximumUnavailableRetryMinutes = 360;
+        private static readonly TimeSpan MaximumBackgroundWorkDuration = TimeSpan.FromSeconds(18);
 
         private readonly IGraphClient _graph;
         private readonly CameraUploadHistoryStore _history;
@@ -160,6 +162,7 @@ namespace LiveDrive.Services
 
         public async Task<int> UploadPendingCameraRollItemsAsync(CancellationToken cancellationToken)
         {
+            var activationStarted = DateTimeOffset.UtcNow;
             _state.SaveLastScanStarted(DateTimeOffset.Now);
             var pendingPaths = (await _state.LoadPendingPathsAsync()).ToList();
             if (pendingPaths.Count == 0)
@@ -258,24 +261,43 @@ namespace LiveDrive.Services
                             uploadSession = null;
                         }
 
-                        var result = await _graph.UploadLargeFileChunkAsync(
-                            destinationFolderId, file, uploadSession, false, true, cancellationToken);
-                        if (!result.IsComplete)
+                        var refreshSessionOffset = uploadSession != null;
+                        var chunksUploaded = 0;
+                        while (true)
                         {
-                            await _state.SaveUploadSessionAsync(result.Session);
-                            await _state.AppendDiagnosticAsync(
-                                "Large upload advanced", file.Name + " at " + result.Session.NextOffset +
-                                " of " + properties.Size + " bytes.");
-                            _state.SaveLastResult(
-                                FormatUploadProgress(
-                                    file.Name,
-                                    (double)result.Session.NextOffset / properties.Size) +
-                                " It will continue at the next scheduled check.");
-                            return 0;
-                        }
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (chunksUploaded >= MaximumLargeUploadChunksPerBackgroundRun ||
+                                DateTimeOffset.UtcNow - activationStarted >= MaximumBackgroundWorkDuration)
+                            {
+                                if (uploadSession != null)
+                                {
+                                    await SaveLargeUploadProgressAsync(
+                                        file.Name, uploadSession, properties.Size, chunksUploaded);
+                                }
+                                else
+                                {
+                                    _state.SaveLastResult(
+                                        "Scheduled Camera Roll backup used its available time before starting " +
+                                        file.Name + ". It will retry at the next scheduled check.");
+                                }
+                                return 0;
+                            }
 
-                        await _state.ClearUploadSessionAsync();
-                        uploadSession = null;
+                            var result = await _graph.UploadLargeFileChunkAsync(
+                                destinationFolderId, file, uploadSession, false, true, cancellationToken,
+                                refreshSessionOffset);
+                            chunksUploaded++;
+                            refreshSessionOffset = false;
+                            if (result.IsComplete)
+                            {
+                                await _state.ClearUploadSessionAsync();
+                                uploadSession = null;
+                                break;
+                            }
+
+                            uploadSession = result.Session;
+                            await _state.SaveUploadSessionAsync(uploadSession);
+                        }
                     }
                     else
                     {
@@ -315,6 +337,18 @@ namespace LiveDrive.Services
                 " " +
                 pendingPaths.Count + " queued item" + (pendingPaths.Count == 1 ? " remains." : "s remain."));
             return uploadedCount;
+        }
+
+        private async Task SaveLargeUploadProgressAsync(
+            string fileName, CameraUploadSessionState session, ulong fileSize, int chunksUploaded)
+        {
+            await _state.SaveUploadSessionAsync(session);
+            await _state.AppendDiagnosticAsync(
+                "Large upload advanced", fileName + " at " + session.NextOffset +
+                " of " + fileSize + " bytes after " + chunksUploaded + " chunk(s).");
+            _state.SaveLastResult(
+                FormatUploadProgress(fileName, (double)session.NextOffset / fileSize) +
+                " It will continue at the next scheduled check.");
         }
 
         private async Task DeferUnavailablePathAsync(
