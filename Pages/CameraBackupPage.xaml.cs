@@ -12,6 +12,7 @@ using Windows.Storage.Pickers;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Navigation;
 
 namespace LiveDrive.Pages
 {
@@ -22,6 +23,10 @@ namespace LiveDrive.Pages
         private bool _isUploading;
         private bool _isCheckingCameraRoll;
         private bool _isInitializingScheduledBackup;
+        private bool _isRefreshingBackupStatus;
+        private bool _isUpdatingScheduledBackup;
+        private bool _hasPendingBackupStatusRefresh;
+        private readonly DispatcherTimer _backupStatusRefreshTimer;
         public ObservableCollection<BackupItem> Queue { get; } = new ObservableCollection<BackupItem>();
         public ObservableCollection<BackupItem> RecentlyUploaded { get; } = new ObservableCollection<BackupItem>();
 
@@ -29,29 +34,108 @@ namespace LiveDrive.Pages
         {
             InitializeComponent();
             _services = ((App)Application.Current).Services;
+            _backupStatusRefreshTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(15)
+            };
+            _backupStatusRefreshTimer.Tick += BackupStatusRefreshTimer_Tick;
             Loaded += async (sender, args) =>
             {
-                _isInitializingScheduledBackup = true;
-                ScheduledBackupToggle.IsOn = _services.CameraBackupScheduler.IsEnabled;
-                _isInitializingScheduledBackup = false;
-                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
-                UpdateLastCameraRollScanStatus();
                 BackupDiagnosticsPanel.Visibility = DiagnosticsSettings.ShowTools
                     ? Visibility.Visible
                     : Visibility.Collapsed;
-                await LoadRecentlyUploadedAsync();
+                await RefreshBackupStatusAsync();
             };
+        }
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
+        {
+            Application.Current.Resuming -= Application_Resuming;
+            Application.Current.Resuming += Application_Resuming;
+            _backupStatusRefreshTimer.Start();
+            base.OnNavigatedTo(e);
+        }
+
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            Application.Current.Resuming -= Application_Resuming;
+            _backupStatusRefreshTimer.Stop();
+            base.OnNavigatedFrom(e);
+        }
+
+        private async void Application_Resuming(object sender, object e)
+        {
+            await RefreshBackupStatusAsync();
+        }
+
+        private async void BackupStatusRefreshTimer_Tick(object sender, object e)
+        {
+            await RefreshBackupStatusAsync();
+        }
+
+        private async Task RefreshBackupStatusAsync(bool refreshScheduledStatus = true)
+        {
+            if (_isCheckingCameraRoll || _isUploading || _isUpdatingScheduledBackup)
+            {
+                _hasPendingBackupStatusRefresh = true;
+                return;
+            }
+
+            if (_isRefreshingBackupStatus)
+            {
+                _hasPendingBackupStatusRefresh = true;
+                return;
+            }
+
+            var shouldRefreshScheduledStatus = refreshScheduledStatus;
+            do
+            {
+                _hasPendingBackupStatusRefresh = false;
+                try
+                {
+                    _isRefreshingBackupStatus = true;
+                    _isInitializingScheduledBackup = true;
+                    ScheduledBackupToggle.IsOn = _services.CameraBackupScheduler.IsEnabled;
+                    _isInitializingScheduledBackup = false;
+                    if (shouldRefreshScheduledStatus)
+                    {
+                        ScheduledBackupStatus.Text = GetScheduledBackupStatus();
+                    }
+                    UpdateLastCameraRollScanStatus();
+                    var pendingPaths = await _services.CameraBackupState.LoadPendingPathsAsync();
+                    ScheduledQueueStatus.Text = pendingPaths.Count == 0
+                        ? "Scheduled backup queue is empty."
+                        : "Scheduled backup queue: " + pendingPaths.Count + " item" +
+                          (pendingPaths.Count == 1 ? " waiting." : "s waiting.");
+                    await LoadRecentlyUploadedAsync();
+                }
+                catch (Exception exception)
+                {
+                    ScheduledBackupStatus.Text = "Could not refresh Camera Roll status: " + exception.Message;
+                }
+                finally
+                {
+                    _isInitializingScheduledBackup = false;
+                    _isRefreshingBackupStatus = false;
+                }
+
+                shouldRefreshScheduledStatus = true;
+            }
+            while (_hasPendingBackupStatusRefresh &&
+                   !_isCheckingCameraRoll && !_isUploading && !_isUpdatingScheduledBackup);
         }
 
         private async void ScheduledBackupToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializingScheduledBackup)
+            if (_isInitializingScheduledBackup || _isUpdatingScheduledBackup)
             {
                 return;
             }
 
             try
             {
+                _isUpdatingScheduledBackup = true;
+                ScheduledBackupToggle.IsEnabled = false;
                 if (ScheduledBackupToggle.IsOn)
                 {
                     var initialRun = await _services.CameraBackupScheduler.EnableAsync();
@@ -64,7 +148,6 @@ namespace LiveDrive.Pages
                 else
                 {
                     _services.CameraBackupScheduler.Disable();
-                    ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                 }
             }
             catch (Exception exception)
@@ -74,6 +157,12 @@ namespace LiveDrive.Pages
                 _isInitializingScheduledBackup = false;
                 ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                 await PageFeedback.ShowErrorAsync(exception);
+            }
+            finally
+            {
+                _isUpdatingScheduledBackup = false;
+                ScheduledBackupToggle.IsEnabled = true;
+                await RefreshBackupStatusAsync(!ScheduledBackupToggle.IsOn);
             }
         }
 
@@ -173,8 +262,6 @@ namespace LiveDrive.Pages
                     CancellationToken.None, progress);
                 UpdateLastCameraRollScanStatus();
                 var uploadedCount = await scanTask;
-                await LoadRecentlyUploadedAsync();
-                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
                 await PageFeedback.ShowInfoAsync(uploadedCount == 0
                     ? _services.CameraBackupState.GetLastResult()
                     : "Uploaded " + uploadedCount + " new Camera Roll " +
@@ -182,8 +269,6 @@ namespace LiveDrive.Pages
             }
             catch (Exception exception)
             {
-                ScheduledBackupStatus.Text = GetScheduledBackupStatus();
-                UpdateLastCameraRollScanStatus();
                 await PageFeedback.ShowErrorAsync(exception);
             }
             finally
@@ -191,6 +276,7 @@ namespace LiveDrive.Pages
                 _isCheckingCameraRoll = false;
                 CheckCameraRollButton.IsEnabled = true;
                 ScheduledBackupToggle.IsEnabled = true;
+                await RefreshBackupStatusAsync();
             }
         }
 
@@ -325,6 +411,7 @@ namespace LiveDrive.Pages
                 UploadButton.IsEnabled = true;
                 EmptyText.Visibility = Queue.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 UploadProgressPanel.Visibility = Visibility.Collapsed;
+                await RefreshBackupStatusAsync();
             }
         }
 
@@ -374,6 +461,12 @@ namespace LiveDrive.Pages
         private async Task LoadRecentlyUploadedAsync()
         {
             var names = await _services.CameraUploadHistory.LoadAsync();
+            if (RecentlyUploaded.Select(item => item.Name).SequenceEqual(names, StringComparer.Ordinal))
+            {
+                UpdateRecentlyUploadedButton();
+                return;
+            }
+
             RecentlyUploaded.Clear();
             foreach (var name in names)
             {

@@ -21,6 +21,8 @@
                        Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,6"/>
             <TextBlock x:Name="LastCameraRollScanStatus" TextWrapping="Wrap"
                        Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,6"/>
+            <TextBlock x:Name="ScheduledQueueStatus" TextWrapping="Wrap"
+                       Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,6"/>
             <Button x:Name="CheckCameraRollButton" Content="Check Camera Roll now"
                     Click="CheckCameraRollButton_Click" HorizontalAlignment="Left"
                     Margin="0,0,0,12" Style="{StaticResource LiveDriveSecondaryButtonStyle}"/>
