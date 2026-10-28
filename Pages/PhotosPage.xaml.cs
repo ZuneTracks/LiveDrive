@@ -41,6 +41,8 @@ namespace LiveDrive.Pages
         private bool _isAppendingPhotoBatch;
         private bool _hasFullPhotoIndex;
         private int _thumbnailWarmupVersion;
+        private List<DriveItem> _mediaItems = new List<DriveItem>();
+        private string _selectedMonthKey;
         private ScrollViewer _photoScrollViewer;
         private PhotoAlbum _album;
         private PhotoCollection _collection;
@@ -148,6 +150,7 @@ namespace LiveDrive.Pages
 
                 await _services.PhotoIndex.ClearAsync();
                 await _services.PhotoIndex.SaveAsync(new List<DriveItem>(), sources);
+                _selectedMonthKey = null;
                 RenderPhotos(new List<DriveItem>());
                 await LoadPhotosAsync();
             }
@@ -169,11 +172,77 @@ namespace LiveDrive.Pages
         private async void PhotoSort_Click(object sender, RoutedEventArgs e)
         {
             ApplyPhotoSort((sender as FrameworkElement).Tag as string);
-            RenderPhotos(_allPhotos);
+            RenderFilteredPhotos();
             if (_album == null && _collection == null)
             {
-                await _services.PhotoIndex.SavePreviewAsync(Photos);
+                await _services.PhotoIndex.SavePreviewAsync(_mediaItems);
             }
+        }
+
+        private async void DateNavigationButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading)
+            {
+                return;
+            }
+
+            var months = GetAvailableMonths();
+            if (months.Count == 0)
+            {
+                await PageFeedback.ShowInfoAsync(
+                    "No dated " + GetMediaTypeLabel() + " are available to jump to yet.");
+                return;
+            }
+
+            var monthList = new ListView
+            {
+                ItemsSource = months,
+                ItemTemplate = Resources["MonthNavigationItemTemplate"] as DataTemplate,
+                IsItemClickEnabled = true,
+                SelectionMode = ListViewSelectionMode.None,
+                Height = 360
+            };
+            var content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = "Choose a month to show in " + (_showVideos ? "Videos" : "Photos") + ".",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+            content.Children.Add(monthList);
+            var dialog = new ContentDialog
+            {
+                Title = "Jump to date",
+                Content = content,
+                SecondaryButtonText = "All dates",
+                IsSecondaryButtonEnabled = !string.IsNullOrEmpty(_selectedMonthKey),
+                CloseButtonText = "Cancel"
+            };
+            PhotoCollection selectedMonth = null;
+            monthList.ItemClick += (list, args) =>
+            {
+                selectedMonth = args.ClickedItem as PhotoCollection;
+                dialog.Hide();
+            };
+
+            var result = await dialog.ShowAsync();
+            if (selectedMonth != null)
+            {
+                _selectedMonthKey = selectedMonth.MonthKey;
+            }
+            else if (result == ContentDialogResult.Secondary)
+            {
+                _selectedMonthKey = null;
+            }
+            else
+            {
+                return;
+            }
+
+            ExitSelectionMode();
+            RenderFilteredPhotos();
+            SetEmptyMessage();
+            EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void ApplyThumbnailSize(string size)
@@ -267,6 +336,10 @@ namespace LiveDrive.Pages
                 : Visibility.Collapsed;
             AlbumInfoText.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
             RemoveFromAlbumButton.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
+            DateNavigationButton.Visibility = _album == null && _collection == null
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            UpdateDateNavigationButton();
             IndexDiagnosticsButton.Visibility = DiagnosticsSettings.ShowTools
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -1132,12 +1205,20 @@ namespace LiveDrive.Pages
 
         private void RenderPhotos(IEnumerable<DriveItem> items)
         {
+            _mediaItems = items.ToList();
+            RenderFilteredPhotos();
+        }
+
+        private void RenderFilteredPhotos()
+        {
             _thumbnailWarmupVersion++;
             Photos.Clear();
-            _allPhotos = SortPhotos(items).ToList();
+            _allPhotos = SortPhotos(FilterBySelectedMonth(_mediaItems)).ToList();
             _displayedPhotoCount = 0;
             AppendPhotoBatch(InitialPhotoBatchSize);
             StartThumbnailWarmup(_thumbnailWarmupVersion);
+            UpdateDateNavigationButton();
+            SetEmptyMessage();
         }
 
         private async void StartThumbnailWarmup(int warmupVersion)
@@ -1232,12 +1313,57 @@ namespace LiveDrive.Pages
                 : items.Where(IsImageFile);
         }
 
+        private IEnumerable<DriveItem> FilterBySelectedMonth(IEnumerable<DriveItem> items)
+        {
+            return string.IsNullOrEmpty(_selectedMonthKey)
+                ? items
+                : items.Where(item => GetMonthKey(item) == _selectedMonthKey);
+        }
+
+        private List<PhotoCollection> GetAvailableMonths()
+        {
+            return _mediaItems
+                .Where(item => !string.IsNullOrEmpty(GetMonthKey(item)))
+                .GroupBy(GetMonthKey)
+                .OrderByDescending(group => group.Key)
+                .Select(group => new PhotoCollection
+                {
+                    Title = GetMonthTitle(group.Key),
+                    MonthKey = group.Key,
+                    Count = group.Count(),
+                    ItemType = _showVideos ? "video" : "photo"
+                })
+                .ToList();
+        }
+
+        private void UpdateDateNavigationButton()
+        {
+            if (_album != null || _collection != null)
+            {
+                return;
+            }
+
+            var selectedMonth = GetAvailableMonths()
+                .FirstOrDefault(month => month.MonthKey == _selectedMonthKey);
+            DateNavigationButton.IsEnabled = _mediaItems.Count > 0;
+            DateNavigationButton.Label = selectedMonth == null ? "Jump to date" : selectedMonth.Title;
+        }
+
         private void SetEmptyMessage()
         {
             if (_album != null)
             {
                 EmptyTitle.Text = "This album is empty.";
                 EmptyDescription.Text = "Add photos from Photos to see them here.";
+                return;
+            }
+
+            var selectedMonth = GetAvailableMonths()
+                .FirstOrDefault(month => month.MonthKey == _selectedMonthKey);
+            if (selectedMonth != null)
+            {
+                EmptyTitle.Text = "No " + GetMediaTypeLabel() + " in " + selectedMonth.Title + ".";
+                EmptyDescription.Text = "Choose All dates to return to your full library.";
                 return;
             }
 
@@ -1255,6 +1381,14 @@ namespace LiveDrive.Pages
                 return string.Empty;
             }
             return date.ToString("yyyy-MM");
+        }
+
+        private static string GetMonthTitle(string monthKey)
+        {
+            DateTimeOffset month;
+            return DateTimeOffset.TryParse(monthKey + "-01", out month)
+                ? month.ToString("MMMM yyyy")
+                : monthKey;
         }
 
         private static DateTimeOffset GetPhotoDate(DriveItem item)

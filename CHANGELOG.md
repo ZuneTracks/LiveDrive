@@ -6,6 +6,7 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Photos and Videos now offer a Month/Year picker for jumping the current grid to a selected date range without changing the library or Collections.
 - Drive now offers persistent folder-first sorting by name, last modified date, or size.
 - While LiveDrive remains open, Photos and Videos now gradually cache off-screen media
   thumbnails after visible items have loaded, so large libraries do not require manual
