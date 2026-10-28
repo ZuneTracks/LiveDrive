@@ -8,6 +8,7 @@ using LiveDrive.Models;
 using Windows.Storage;
 using Windows.Storage.Search;
 #if BACKGROUND_TASK
+using CameraBackupRetryState = LiveDrive.BackgroundTasks.CameraBackupRetryState;
 using CameraUploadSessionState = LiveDrive.BackgroundTasks.CameraUploadSessionState;
 #endif
 
@@ -27,6 +28,8 @@ namespace LiveDrive.Services
         private const int MaximumUploadsPerBackgroundRun = 1;
         private const uint RecentFilesPerBackgroundRun = 12;
         private const int MaximumPendingPaths = 100;
+        private const int InitialUnavailableRetryMinutes = 15;
+        private const int MaximumUnavailableRetryMinutes = 360;
 
         private readonly IGraphClient _graph;
         private readonly CameraUploadHistoryStore _history;
@@ -160,6 +163,8 @@ namespace LiveDrive.Services
             _state.SaveLastScanStarted(DateTimeOffset.Now);
             var pendingPaths = (await _state.LoadPendingPathsAsync()).ToList();
             await QueueRecentCameraRollFilesAsync(pendingPaths, cancellationToken);
+            var retryStates = (await _state.LoadPendingRetryStatesAsync())
+                .ToDictionary(state => state.FilePath, StringComparer.OrdinalIgnoreCase);
             await _state.AppendDiagnosticAsync(
                 "Scheduled queue checked", pendingPaths.Count + " item(s) waiting.");
             if (pendingPaths.Count == 0)
@@ -168,24 +173,30 @@ namespace LiveDrive.Services
                 return 0;
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
             var destinationFolderId = _state.GetDestinationFolderId();
-            if (string.IsNullOrEmpty(destinationFolderId))
-            {
-                var destination = await _graph.GetOrCreateRootFolderAsync(
-                    "LiveDrive Camera Roll", cancellationToken);
-                destinationFolderId = destination.Id;
-                _state.SaveDestinationFolderId(destinationFolderId);
-            }
-
             var uploadedCount = 0;
             var skippedCount = 0;
             var uploadSession = await _state.LoadUploadSessionAsync();
+            if (uploadSession != null &&
+                !pendingPaths.Contains(uploadSession.FilePath, StringComparer.OrdinalIgnoreCase))
+            {
+                await _state.ClearUploadSessionAsync();
+                uploadSession = null;
+            }
             while (pendingPaths.Count > 0 &&
                 uploadedCount + skippedCount < MaximumUploadsPerBackgroundRun)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var path = pendingPaths[0];
+                var now = DateTimeOffset.UtcNow;
+                var path = uploadSession == null
+                    ? pendingPaths.FirstOrDefault(candidate => IsReadyToRetry(retryStates, candidate, now))
+                    : uploadSession.FilePath;
+                if (string.IsNullOrEmpty(path) || !IsReadyToRetry(retryStates, path, now))
+                {
+                    SaveWaitingForRetryResult(pendingPaths, retryStates, now);
+                    return 0;
+                }
+
                 StorageFile file;
                 try
                 {
@@ -193,17 +204,24 @@ namespace LiveDrive.Services
                 }
                 catch (FileNotFoundException)
                 {
-                    pendingPaths.RemoveAt(0);
-                    await _state.SavePendingPathsAsync(pendingPaths);
-                    skippedCount++;
-                    continue;
+                    await DeferUnavailablePathAsync(
+                        path, retryStates, "The file was not available.", pendingPaths.Count);
+                    return 0;
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    pendingPaths.RemoveAt(0);
-                    await _state.SavePendingPathsAsync(pendingPaths);
-                    skippedCount++;
-                    continue;
+                    await DeferUnavailablePathAsync(
+                        path, retryStates, "Access to the file was unavailable.", pendingPaths.Count);
+                    return 0;
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                if (string.IsNullOrEmpty(destinationFolderId))
+                {
+                    var destination = await _graph.GetOrCreateRootFolderAsync(
+                        "LiveDrive Camera Roll", cancellationToken);
+                    destinationFolderId = destination.Id;
+                    _state.SaveDestinationFolderId(destinationFolderId);
                 }
 
                 try
@@ -247,8 +265,10 @@ namespace LiveDrive.Services
                     await _state.ClearUploadSessionAsync();
                     uploadSession = null;
                     await _state.MarkUploadedAsync(file.Path);
-                    pendingPaths.RemoveAt(0);
+                    retryStates.Remove(path);
+                    RemovePendingPath(pendingPaths, path);
                     await _state.SavePendingPathsAsync(pendingPaths);
+                    await _state.SavePendingRetryStatesAsync(retryStates.Values);
                     skippedCount++;
                     continue;
                 }
@@ -256,20 +276,91 @@ namespace LiveDrive.Services
                 await _state.MarkUploadedAsync(file.Path);
                 await _history.AddAsync(file.Name);
                 await _state.AppendDiagnosticAsync("Camera Roll item uploaded", file.Name);
-                pendingPaths.RemoveAt(0);
+                retryStates.Remove(path);
+                RemovePendingPath(pendingPaths, path);
                 await _state.SavePendingPathsAsync(pendingPaths);
+                await _state.SavePendingRetryStatesAsync(retryStates.Values);
                 uploadedCount++;
             }
 
             await _state.SavePendingPathsAsync(pendingPaths);
+            await _state.SavePendingRetryStatesAsync(retryStates.Values);
             _state.SaveLastResult(
                 "Uploaded " + uploadedCount + " Camera Roll " +
                 (uploadedCount == 1 ? "item." : "items.") +
-                (skippedCount == 0 ? string.Empty : " Skipped " + skippedCount + " unavailable or existing " +
+                (skippedCount == 0 ? string.Empty : " Skipped " + skippedCount + " existing " +
                     (skippedCount == 1 ? "item." : "items.")) +
                 " " +
                 pendingPaths.Count + " queued item" + (pendingPaths.Count == 1 ? " remains." : "s remain."));
             return uploadedCount;
+        }
+
+        private async Task DeferUnavailablePathAsync(
+            string path, IDictionary<string, CameraBackupRetryState> retryStates,
+            string reason, int queuedCount)
+        {
+            CameraBackupRetryState retryState;
+            if (!retryStates.TryGetValue(path, out retryState))
+            {
+                retryState = new CameraBackupRetryState { FilePath = path };
+                retryStates[path] = retryState;
+            }
+
+            retryState.UnavailableCount++;
+            retryState.NextRetryUtc = DateTimeOffset.UtcNow.Add(
+                GetUnavailableRetryDelay(retryState.UnavailableCount));
+            await _state.SavePendingRetryStatesAsync(retryStates.Values);
+            var fileName = Path.GetFileName(path);
+            await _state.AppendDiagnosticAsync(
+                "Camera Roll item deferred",
+                fileName + "; attempt " + retryState.UnavailableCount + ". " + reason);
+            _state.SaveLastResult(
+                "Camera Roll item " + fileName + " is temporarily unavailable. It remains queued and will retry after " +
+                retryState.NextRetryUtc.ToLocalTime().ToString("g") + ". " +
+                queuedCount + " queued item" + (queuedCount == 1 ? " remains." : "s remain."));
+        }
+
+        private void SaveWaitingForRetryResult(
+            IEnumerable<string> pendingPaths,
+            IDictionary<string, CameraBackupRetryState> retryStates,
+            DateTimeOffset now)
+        {
+            var nextRetry = pendingPaths
+                .Select(path => retryStates.ContainsKey(path) ? retryStates[path].NextRetryUtc : now)
+                .Where(timestamp => timestamp > now)
+                .OrderBy(timestamp => timestamp)
+                .FirstOrDefault();
+            _state.SaveLastResult(
+                "Waiting to retry temporarily unavailable Camera Roll items after " +
+                nextRetry.ToLocalTime().ToString("g") + ". " +
+                pendingPaths.Count() + " queued item" +
+                (pendingPaths.Count() == 1 ? " remains." : "s remain."));
+        }
+
+        private static bool IsReadyToRetry(
+            IDictionary<string, CameraBackupRetryState> retryStates, string path, DateTimeOffset now)
+        {
+            CameraBackupRetryState retryState;
+            return !retryStates.TryGetValue(path, out retryState) || retryState.NextRetryUtc <= now;
+        }
+
+        private static TimeSpan GetUnavailableRetryDelay(int unavailableCount)
+        {
+            var multiplier = 1 << Math.Min(Math.Max(0, unavailableCount - 1), 5);
+            var minutes = Math.Min(MaximumUnavailableRetryMinutes, InitialUnavailableRetryMinutes * multiplier);
+            return TimeSpan.FromMinutes(minutes);
+        }
+
+        private static void RemovePendingPath(IList<string> pendingPaths, string path)
+        {
+            for (var index = 0; index < pendingPaths.Count; index++)
+            {
+                if (string.Equals(pendingPaths[index], path, StringComparison.OrdinalIgnoreCase))
+                {
+                    pendingPaths.RemoveAt(index);
+                    return;
+                }
+            }
         }
 
         private async Task QueueRecentCameraRollFilesAsync(

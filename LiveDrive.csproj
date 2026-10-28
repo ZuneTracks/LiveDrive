@@ -135,6 +135,7 @@
     <Compile Include="Helpers\ThumbnailConverter.cs" />
     <Compile Include="Models\AuthToken.cs" />
     <Compile Include="Models\BackupItem.cs" />
+    <Compile Include="Models\CameraBackupRetryState.cs" />
     <Compile Include="Models\CameraUploadSessionState.cs" />
     <Compile Include="Models\DriveItem.cs" />
     <Compile Include="Models\DriveItemPage.cs" />
