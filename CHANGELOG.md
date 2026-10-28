@@ -37,6 +37,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Fixed scheduled Camera Backup queue removal crashing when its dialog closes or its
+  storage operation cannot complete.
 - Fixed the Camera Backup page crashing on Windows 10 Mobile when loading the Scheduled
   backup queue link.
 - Camera Backup now records the lock-acquisition checkpoint and handles failures in that
