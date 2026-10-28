@@ -37,6 +37,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Scheduled Camera Backup now reconciles a queued file already present in OneDrive before
+  uploading, and stops discovering additional files while an existing queue drains.
 - Fixed scheduled Camera Backup queue removal crashing when its dialog closes or its
   storage operation cannot complete.
 - Fixed the Camera Backup page crashing on Windows 10 Mobile when loading the Scheduled

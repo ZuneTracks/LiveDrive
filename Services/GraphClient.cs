@@ -495,12 +495,13 @@ namespace LiveDrive.Services
             }
         }
 
-        private async Task<bool> ItemExistsAsync(string parentId, string name)
+        public async Task<bool> ItemExistsAsync(
+            string parentId, string name, CancellationToken cancellationToken = default(CancellationToken))
         {
             var path = "/me/drive/items/" + Uri.EscapeDataString(parentId) + ":/" +
                 Uri.EscapeDataString(name) + "?$select=id";
             using (var response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, path),
-                HttpCompletionOption.ResponseContentRead, true))
+                HttpCompletionOption.ResponseContentRead, true, cancellationToken))
             {
                 return response.StatusCode != HttpStatusCode.NotFound;
             }
