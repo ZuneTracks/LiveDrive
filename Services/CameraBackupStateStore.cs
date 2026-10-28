@@ -35,6 +35,7 @@ namespace LiveDrive.Services
         private const string LastScheduledRegistrationRepairSettingName =
             "CameraBackupLastScheduledRegistrationRepair";
         private const string ToastDiagnosticSettingName = "CameraBackupToastDiagnostic";
+        private const int FileAlreadyExistsHResult = unchecked((int)0x800700B7);
         private const int MaximumUploadedPaths = 1000;
         private const int MaximumPendingPaths = 100;
         private const int MaximumDiagnosticEntries = 150;
@@ -236,7 +237,7 @@ namespace LiveDrive.Services
                     BackgroundRunLockFileName, CreationCollisionOption.FailIfExists);
                 return true;
             }
-            catch (IOException)
+            catch (Exception exception) when (IsFileAlreadyExists(exception))
             {
                 try
                 {
@@ -253,7 +254,7 @@ namespace LiveDrive.Services
                 catch (FileNotFoundException)
                 {
                 }
-                catch (IOException)
+                catch (Exception lockException) when (IsFileAlreadyExists(lockException))
                 {
                 }
                 return false;
@@ -502,6 +503,11 @@ namespace LiveDrive.Services
                 sanitized = sanitized.Substring(0, MaximumLength) + "…";
             }
             return sanitized;
+        }
+
+        private static bool IsFileAlreadyExists(Exception exception)
+        {
+            return exception.HResult == FileAlreadyExistsHResult;
         }
     }
 }

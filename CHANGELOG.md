@@ -37,6 +37,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Scheduled Camera Backup now treats Windows' `0x800700B7` lock-file result as normal
+  lock contention instead of failing before it can process the queue.
 - Queue removal now persists the primary scheduled queue separately, so stale retry or
   resumable-session data cannot block removal.
 - Scheduled Camera Backup now reconciles a queued file already present in OneDrive before
