@@ -378,8 +378,6 @@ namespace LiveDrive.Pages
                 if (await _services.CameraBackupState.RemovePendingPathAsync(item.Path))
                 {
                     _scheduledQueueItems.Remove(item);
-                    await _services.CameraBackupState.AppendDiagnosticAsync(
-                        "Camera Roll queue item removed", item.Name);
                     _services.CameraBackupState.SaveLastResult(
                         "Removed " + item.Name + " from the scheduled Camera Roll queue.");
                     itemRemoved = true;

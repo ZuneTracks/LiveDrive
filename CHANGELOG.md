@@ -37,6 +37,8 @@ All notable user-facing changes are documented here.
 
 ### Fixes
 
+- Queue removal now persists the primary scheduled queue separately, so stale retry or
+  resumable-session data cannot block removal.
 - Scheduled Camera Backup now reconciles a queued file already present in OneDrive before
   uploading, and stops discovering additional files while an existing queue drains.
 - Fixed scheduled Camera Backup queue removal crashing when its dialog closes or its
