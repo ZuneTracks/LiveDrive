@@ -111,10 +111,6 @@
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>
-            <StackPanel x:Name="LoadingPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <ProgressRing IsActive="True" Width="28" Height="28"/>
-                <TextBlock x:Name="LoadingText" Text="Loading your photos…" Style="{StaticResource LiveDriveStateDescriptionStyle}"/>
-            </StackPanel>
             <StackPanel x:Name="EmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
                 <TextBlock x:Name="EmptyTitle" Text="No photos found." Style="{StaticResource LiveDriveStateTitleStyle}"/>
                 <TextBlock x:Name="EmptyDescription" Text="Photos in your selected OneDrive folders will appear here."
