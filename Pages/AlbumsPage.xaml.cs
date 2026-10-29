@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Helpers;
 using LiveDrive.Models;
@@ -76,7 +77,8 @@ namespace LiveDrive.Pages
                         .FirstOrDefault(item => item != null);
                     if (cover != null)
                     {
-                        _services.PhotoIndex.SetCachedThumbnailUris(new[] { cover }, false);
+                        await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
+                            new[] { cover }, false, CancellationToken.None);
                         album.CoverThumbnailUrl = cover.ThumbnailUrl;
                         _ = CacheAlbumCoverAsync(album, cover);
                     }
