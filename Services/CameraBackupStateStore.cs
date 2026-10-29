@@ -34,6 +34,14 @@ namespace LiveDrive.Services
         private const string LastBackgroundActivationSettingName = "CameraBackupLastBackgroundActivation";
         private const string LastScheduledRegistrationRepairSettingName =
             "CameraBackupLastScheduledRegistrationRepair";
+        private const string ScheduledBackupEnrollmentSettingName =
+            "CameraBackupEnrollmentUtc";
+        private const string LastBackgroundLockStatusSettingName =
+            "CameraBackupLastLockStatus";
+        private const string LastBackgroundDurationMillisecondsSettingName =
+            "CameraBackupLastDurationMilliseconds";
+        private const string LastLargeUploadChunkMillisecondsSettingName =
+            "CameraBackupLastLargeUploadChunkMilliseconds";
         private const string ToastDiagnosticSettingName = "CameraBackupToastDiagnostic";
         private const int FileAlreadyExistsHResult = unchecked((int)0x800700B7);
         private const int MaximumUploadedPaths = 1000;
@@ -60,6 +68,23 @@ namespace LiveDrive.Services
             {
                 ApplicationData.Current.LocalSettings.Values.Remove(ScheduledBackupEnabledSettingName);
             }
+        }
+
+        public bool EnsureScheduledBackupEnrollment(DateTimeOffset timestamp)
+        {
+            if (GetScheduledBackupEnrollment().HasValue)
+            {
+                return false;
+            }
+
+            ApplicationData.Current.LocalSettings.Values[ScheduledBackupEnrollmentSettingName] =
+                timestamp.ToUniversalTime().ToString("o");
+            return true;
+        }
+
+        public DateTimeOffset? GetScheduledBackupEnrollment()
+        {
+            return GetTimestampSetting(ScheduledBackupEnrollmentSettingName);
         }
 
         public async Task<IReadOnlyList<string>> LoadUploadedPathsAsync()
@@ -397,12 +422,7 @@ namespace LiveDrive.Services
 
         public DateTimeOffset? GetLastBackgroundActivation()
         {
-            object value;
-            DateTimeOffset timestamp;
-            return ApplicationData.Current.LocalSettings.Values.TryGetValue(LastBackgroundActivationSettingName, out value) &&
-                DateTimeOffset.TryParse(value as string, out timestamp)
-                ? timestamp
-                : (DateTimeOffset?)null;
+            return GetTimestampSetting(LastBackgroundActivationSettingName);
         }
 
         public void SaveLastScheduledRegistrationRepair(DateTimeOffset timestamp)
@@ -413,13 +433,39 @@ namespace LiveDrive.Services
 
         public DateTimeOffset? GetLastScheduledRegistrationRepair()
         {
-            object value;
-            DateTimeOffset timestamp;
-            return ApplicationData.Current.LocalSettings.Values.TryGetValue(
-                LastScheduledRegistrationRepairSettingName, out value) &&
-                DateTimeOffset.TryParse(value as string, out timestamp)
-                ? timestamp
-                : (DateTimeOffset?)null;
+            return GetTimestampSetting(LastScheduledRegistrationRepairSettingName);
+        }
+
+        public void SaveLastBackgroundLockStatus(string status)
+        {
+            ApplicationData.Current.LocalSettings.Values[LastBackgroundLockStatusSettingName] = status;
+        }
+
+        public string GetLastBackgroundLockStatus()
+        {
+            return GetStringSetting(LastBackgroundLockStatusSettingName);
+        }
+
+        public void SaveLastBackgroundDuration(TimeSpan duration)
+        {
+            ApplicationData.Current.LocalSettings.Values[LastBackgroundDurationMillisecondsSettingName] =
+                duration.TotalMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        public TimeSpan? GetLastBackgroundDuration()
+        {
+            return GetDurationSetting(LastBackgroundDurationMillisecondsSettingName);
+        }
+
+        public void SaveLastLargeUploadChunkDuration(TimeSpan duration)
+        {
+            ApplicationData.Current.LocalSettings.Values[LastLargeUploadChunkMillisecondsSettingName] =
+                duration.TotalMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        public TimeSpan? GetLastLargeUploadChunkDuration()
+        {
+            return GetDurationSetting(LastLargeUploadChunkMillisecondsSettingName);
         }
 
         public void SaveToastDiagnostic(string result)
@@ -445,6 +491,10 @@ namespace LiveDrive.Services
             ApplicationData.Current.LocalSettings.Values.Remove(ScheduledBackupEnabledSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(LastBackgroundActivationSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(LastScheduledRegistrationRepairSettingName);
+            ApplicationData.Current.LocalSettings.Values.Remove(ScheduledBackupEnrollmentSettingName);
+            ApplicationData.Current.LocalSettings.Values.Remove(LastBackgroundLockStatusSettingName);
+            ApplicationData.Current.LocalSettings.Values.Remove(LastBackgroundDurationMillisecondsSettingName);
+            ApplicationData.Current.LocalSettings.Values.Remove(LastLargeUploadChunkMillisecondsSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(PendingScanOffsetSettingName);
             await ClearDiagnosticsAsync();
             try
@@ -503,6 +553,34 @@ namespace LiveDrive.Services
                 sanitized = sanitized.Substring(0, MaximumLength) + "…";
             }
             return sanitized;
+        }
+
+        private static string GetStringSetting(string settingName)
+        {
+            object value;
+            return ApplicationData.Current.LocalSettings.Values.TryGetValue(settingName, out value)
+                ? value as string
+                : string.Empty;
+        }
+
+        private static DateTimeOffset? GetTimestampSetting(string settingName)
+        {
+            DateTimeOffset timestamp;
+            return DateTimeOffset.TryParse(GetStringSetting(settingName), out timestamp)
+                ? timestamp
+                : (DateTimeOffset?)null;
+        }
+
+        private static TimeSpan? GetDurationSetting(string settingName)
+        {
+            double milliseconds;
+            return double.TryParse(
+                GetStringSetting(settingName),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out milliseconds)
+                ? TimeSpan.FromMilliseconds(milliseconds)
+                : (TimeSpan?)null;
         }
 
         private static bool IsFileAlreadyExists(Exception exception)

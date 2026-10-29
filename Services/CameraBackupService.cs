@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -283,9 +284,11 @@ namespace LiveDrive.Services
                                 return 0;
                             }
 
+                            var chunkTimer = Stopwatch.StartNew();
                             var result = await _graph.UploadLargeFileChunkAsync(
                                 destinationFolderId, file, uploadSession, false, true, cancellationToken,
                                 refreshSessionOffset);
+                            _state.SaveLastLargeUploadChunkDuration(chunkTimer.Elapsed);
                             chunksUploaded++;
                             refreshSessionOffset = false;
                             if (result.IsComplete)
@@ -427,40 +430,61 @@ namespace LiveDrive.Services
                 await _state.LoadUploadedPathsAsync(), StringComparer.OrdinalIgnoreCase);
             var queuedPaths = new HashSet<string>(pendingPaths, StringComparer.OrdinalIgnoreCase);
             var query = KnownFolders.CameraRoll.CreateFileQuery(CommonFileQuery.OrderByDate);
+            var enrollment = _state.GetScheduledBackupEnrollment();
+            var skippedBeforeEnrollment = 0;
             var recentFiles = await query.GetFilesAsync(0, RecentFilesPerBackgroundRun);
-            QueueCameraRollFiles(recentFiles, uploadedPaths, queuedPaths, pendingPaths, cancellationToken);
+            skippedBeforeEnrollment += QueueCameraRollFiles(
+                recentFiles, uploadedPaths, queuedPaths, pendingPaths, enrollment, cancellationToken);
 
             if (pendingPaths.Count < MaximumPendingPaths)
             {
                 var offset = _state.GetPendingScanOffset();
                 var olderFiles = await query.GetFilesAsync(offset, RecentFilesPerBackgroundRun);
-                QueueCameraRollFiles(olderFiles, uploadedPaths, queuedPaths, pendingPaths, cancellationToken);
+                skippedBeforeEnrollment += QueueCameraRollFiles(
+                    olderFiles, uploadedPaths, queuedPaths, pendingPaths, enrollment, cancellationToken);
                 _state.SavePendingScanOffset(olderFiles.Count < RecentFilesPerBackgroundRun
                     ? 0
                     : offset + (uint)olderFiles.Count);
             }
 
+            if (skippedBeforeEnrollment > 0)
+            {
+                await _state.AppendDiagnosticAsync(
+                    "Scheduled discovery skipped older media",
+                    skippedBeforeEnrollment + " item(s) predate scheduled-backup enrollment.");
+            }
             await _state.SavePendingPathsAsync(pendingPaths);
         }
 
-        private static void QueueCameraRollFiles(
+        private static int QueueCameraRollFiles(
             IReadOnlyList<StorageFile> files, ISet<string> uploadedPaths, ISet<string> queuedPaths,
-            ICollection<string> pendingPaths, CancellationToken cancellationToken)
+            ICollection<string> pendingPaths, DateTimeOffset? enrollment,
+            CancellationToken cancellationToken)
         {
+            var skippedBeforeEnrollment = 0;
             foreach (var file in files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (pendingPaths.Count >= MaximumPendingPaths)
                 {
-                    return;
+                    return skippedBeforeEnrollment;
                 }
-                if (SupportedExtensions.Contains(Path.GetExtension(file.Name)) &&
-                    !uploadedPaths.Contains(file.Path) &&
+                if (!SupportedExtensions.Contains(Path.GetExtension(file.Name)))
+                {
+                    continue;
+                }
+                if (enrollment.HasValue && file.DateCreated <= enrollment.Value)
+                {
+                    skippedBeforeEnrollment++;
+                    continue;
+                }
+                if (!uploadedPaths.Contains(file.Path) &&
                     queuedPaths.Add(file.Path))
                 {
                     pendingPaths.Add(file.Path);
                 }
             }
+            return skippedBeforeEnrollment;
         }
 
         internal static bool IsNameAlreadyExistsConflict(Exception exception)
