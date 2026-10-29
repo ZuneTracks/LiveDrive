@@ -332,7 +332,6 @@ namespace LiveDrive.Pages
             _showVideos = IsVideoLibraryPage || string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
             PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title :
                 _showVideos ? "Videos" : "Photos";
-            LoadingText.Text = _showVideos ? "Loading your videos…" : "Loading your photos…";
             BackButton.Visibility = (_album != null || _collection != null) && Frame.CanGoBack
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -381,8 +380,8 @@ namespace LiveDrive.Pages
             }
 
             _isLoading = true;
-            LoadingPanel.Visibility = Visibility.Visible;
             SyncStatusPanel.Visibility = Visibility.Visible;
+            SetSyncStatus(GetLoadingMessage());
             EmptyPanel.Visibility = Visibility.Collapsed;
             try
             {
@@ -396,8 +395,7 @@ namespace LiveDrive.Pages
                         await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
                             filteredPreview, CancellationToken.None);
                         RenderPhotos(filteredPreview);
-                        LoadingPanel.Visibility = Visibility.Collapsed;
-                        SetSyncStatus(GetCachedMediaStatus("Loading your library…"));
+                        SetSyncStatus(GetLoadingMessage());
                         hasPreview = true;
                     }
                 }
@@ -427,16 +425,13 @@ namespace LiveDrive.Pages
                 if (_album != null || _collection != null)
                 {
                     RenderPhotos(FilterPhotos(snapshot.Items));
-                    SetSyncStatus(GetCachedMediaStatus());
+                    SetSyncStatus(GetLoadingMessage());
                     SetEmptyMessage();
                     EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                     return;
                 }
                 RenderPhotos(FilterPhotos(snapshot.Items));
-                LoadingPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-                SetSyncStatus(Photos.Count == 0
-                    ? "Finding " + GetMediaTypeLabel() + " across your drive…"
-                    : GetCachedMediaStatus("Checking for updates…"));
+                SetSyncStatus(GetLoadingMessage());
                 if (!hasPreview)
                 {
                     await _services.PhotoIndex.SavePreviewAsync(snapshot.Items);
@@ -512,15 +507,13 @@ namespace LiveDrive.Pages
                         if (!hasVisiblePhotos && FilterPhotos(indexedPhotos.Values).Any())
                         {
                             RenderPhotos(FilterPhotos(indexedPhotos.Values));
-                            LoadingPanel.Visibility = Visibility.Collapsed;
                             hasVisiblePhotos = true;
                         }
 
                         nextLink = page.NextLink;
                         if (DateTimeOffset.UtcNow - lastPublished >= TimeSpan.FromSeconds(3))
                         {
-                            SetSyncStatus("Found " + indexedPhotos.Count + " " + GetMediaTypeLabel() +
-                                ". Scanning " + source.Name + "…");
+                            SetSyncStatus(GetLoadingMessage());
                             lastPublished = DateTimeOffset.UtcNow;
                         }
 
@@ -543,7 +536,6 @@ namespace LiveDrive.Pages
                 }
 
                 RenderPhotos(FilterPhotos(indexedPhotos.Values));
-                LoadingPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 await _services.PhotoIndex.SaveAsync(indexedPhotos.Values, snapshot.SourceFolders);
                 await _services.PhotoIndexDiagnostics.AppendAsync(
                     "Index refresh completed",
@@ -557,7 +549,6 @@ namespace LiveDrive.Pages
             }
             finally
             {
-                LoadingPanel.Visibility = Visibility.Collapsed;
                 SyncStatusPanel.Visibility = Visibility.Collapsed;
                 _isLoading = false;
             }
@@ -565,14 +556,12 @@ namespace LiveDrive.Pages
 
         private void SetSyncStatus(string text)
         {
-            LoadingText.Text = text;
             SyncStatusText.Text = text;
         }
 
-        private string GetCachedMediaStatus(string suffix = null)
+        private string GetLoadingMessage()
         {
-            return "Showing cached " + GetMediaTypeLabel() +
-                (string.IsNullOrEmpty(suffix) ? "." : ". " + suffix);
+            return _showVideos ? "Loading your videos…" : "Loading your photos…";
         }
 
         private string GetMediaTypeLabel()

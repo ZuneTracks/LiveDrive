@@ -6,6 +6,8 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Photos, Videos, and album/collection results now use their footer loading indicator
+  exclusively, keeping the media grid free of a duplicate central loading message.
 - Photos and Videos now retain independent cached grid pages when switching sections,
   returning to each already-rendered library without rebuilding the other view.
 - Photos, Videos, and album covers now restore cached thumbnails in a single directory
