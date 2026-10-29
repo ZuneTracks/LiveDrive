@@ -40,6 +40,7 @@ namespace LiveDrive.Pages
         private int _displayedPhotoCount;
         private bool _isAppendingPhotoBatch;
         private bool _hasFullPhotoIndex;
+        private bool _hasLoadedMediaPage;
         private int _thumbnailWarmupVersion;
         private List<DriveItem> _mediaItems = new List<DriveItem>();
         private string _selectedMonthKey;
@@ -75,7 +76,7 @@ namespace LiveDrive.Pages
 
         private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
-            await LoadPhotosAsync();
+            await LoadPhotosAsync(true);
         }
 
         private async void IndexDiagnosticsButton_Click(object sender, RoutedEventArgs e)
@@ -153,7 +154,7 @@ namespace LiveDrive.Pages
                 await _services.PhotoIndex.SaveAsync(new List<DriveItem>(), sources);
                 _selectedMonthKey = null;
                 RenderPhotos(new List<DriveItem>());
-                await LoadPhotosAsync();
+                await LoadPhotosAsync(true);
             }
             catch (Exception exception)
             {
@@ -372,7 +373,7 @@ namespace LiveDrive.Pages
             }
         }
 
-        private async Task LoadPhotosAsync()
+        private async Task LoadPhotosAsync(bool userRequestedRefresh = false)
         {
             if (_isLoading)
             {
@@ -380,13 +381,21 @@ namespace LiveDrive.Pages
             }
 
             _isLoading = true;
-            SyncStatusPanel.Visibility = Visibility.Visible;
-            SetSyncStatus(GetLoadingMessage());
-            EmptyPanel.Visibility = Visibility.Collapsed;
+            var isInitialLoad = !_hasLoadedMediaPage;
+            var showProgress = isInitialLoad || userRequestedRefresh;
+            if (showProgress)
+            {
+                SyncStatusPanel.Visibility = Visibility.Visible;
+                SetSyncStatus(GetLoadingMessage());
+            }
+            if (isInitialLoad)
+            {
+                EmptyPanel.Visibility = Visibility.Collapsed;
+            }
             try
             {
                 var hasPreview = false;
-                if (_album == null && _collection == null)
+                if (isInitialLoad && _album == null && _collection == null)
                 {
                     var preview = await _services.PhotoIndex.LoadPreviewAsync();
                     var filteredPreview = FilterPhotos(preview).ToList();
@@ -395,14 +404,20 @@ namespace LiveDrive.Pages
                         await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
                             filteredPreview, CancellationToken.None);
                         RenderPhotos(filteredPreview);
-                        SetSyncStatus(GetLoadingMessage());
+                        if (showProgress)
+                        {
+                            SetSyncStatus(GetLoadingMessage());
+                        }
                         hasPreview = true;
                     }
                 }
 
                 var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
-                await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                    snapshot.Items, CancellationToken.None);
+                if (isInitialLoad)
+                {
+                    await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
+                        snapshot.Items, CancellationToken.None);
+                }
                 _hasFullPhotoIndex = true;
                 if (snapshot.SourceFolders.Count == 0)
                 {
@@ -425,20 +440,30 @@ namespace LiveDrive.Pages
                 if (_album != null || _collection != null)
                 {
                     RenderPhotos(FilterPhotos(snapshot.Items));
-                    SetSyncStatus(GetLoadingMessage());
+                    if (showProgress)
+                    {
+                        SetSyncStatus(GetLoadingMessage());
+                    }
                     SetEmptyMessage();
                     EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                     return;
                 }
-                RenderPhotos(FilterPhotos(snapshot.Items));
-                SetSyncStatus(GetLoadingMessage());
-                if (!hasPreview)
+                if (isInitialLoad)
                 {
-                    await _services.PhotoIndex.SavePreviewAsync(snapshot.Items);
+                    RenderPhotos(FilterPhotos(snapshot.Items));
+                    _hasLoadedMediaPage = true;
+                    if (showProgress)
+                    {
+                        SetSyncStatus(GetLoadingMessage());
+                    }
+                    if (!hasPreview)
+                    {
+                        await _services.PhotoIndex.SavePreviewAsync(snapshot.Items);
+                    }
                 }
 
                 var indexedPhotos = snapshot.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
-                var hasVisiblePhotos = Photos.Count > 0;
+                var hasVisiblePhotos = isInitialLoad && Photos.Count > 0;
                 var lastPublished = DateTimeOffset.UtcNow;
                 await _services.PhotoIndexDiagnostics.AppendAsync(
                     "Index refresh started",
@@ -504,14 +529,14 @@ namespace LiveDrive.Pages
                             }
                         }
 
-                        if (!hasVisiblePhotos && FilterPhotos(indexedPhotos.Values).Any())
+                        if (isInitialLoad && !hasVisiblePhotos && FilterPhotos(indexedPhotos.Values).Any())
                         {
                             RenderPhotos(FilterPhotos(indexedPhotos.Values));
                             hasVisiblePhotos = true;
                         }
 
                         nextLink = page.NextLink;
-                        if (DateTimeOffset.UtcNow - lastPublished >= TimeSpan.FromSeconds(3))
+                        if (showProgress && DateTimeOffset.UtcNow - lastPublished >= TimeSpan.FromSeconds(3))
                         {
                             SetSyncStatus(GetLoadingMessage());
                             lastPublished = DateTimeOffset.UtcNow;
@@ -535,13 +560,26 @@ namespace LiveDrive.Pages
                         " item(s), " + videoItemCount + " video item(s).");
                 }
 
-                RenderPhotos(FilterPhotos(indexedPhotos.Values));
+                var refreshedMedia = FilterPhotos(indexedPhotos.Values).ToList();
+                var visibleMediaChanged = HasVisibleMediaChanged(_mediaItems, refreshedMedia);
+                if (visibleMediaChanged)
+                {
+                    RenderPhotos(refreshedMedia);
+                }
+                else
+                {
+                    _mediaItems = refreshedMedia;
+                    UpdateDateNavigationButton();
+                }
                 await _services.PhotoIndex.SaveAsync(indexedPhotos.Values, snapshot.SourceFolders);
                 await _services.PhotoIndexDiagnostics.AppendAsync(
                     "Index refresh completed",
                     indexedPhotos.Count + " media item(s), " +
                     indexedPhotos.Values.Count(IsVideoFile) + " video item(s).");
-                EmptyPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (isInitialLoad || visibleMediaChanged)
+                {
+                    EmptyPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
             }
             catch (Exception exception)
             {
@@ -549,9 +587,50 @@ namespace LiveDrive.Pages
             }
             finally
             {
-                SyncStatusPanel.Visibility = Visibility.Collapsed;
+                if (showProgress)
+                {
+                    SyncStatusPanel.Visibility = Visibility.Collapsed;
+                }
                 _isLoading = false;
             }
+        }
+
+        private bool HasVisibleMediaChanged(
+            IEnumerable<DriveItem> currentMedia,
+            IEnumerable<DriveItem> refreshedMedia)
+        {
+            var currentVisibleMedia = SortPhotos(FilterBySelectedMonth(currentMedia)).ToList();
+            var refreshedVisibleMedia = SortPhotos(FilterBySelectedMonth(refreshedMedia)).ToList();
+            if (currentVisibleMedia.Count != refreshedVisibleMedia.Count)
+            {
+                return true;
+            }
+
+            for (var index = 0; index < currentVisibleMedia.Count; index++)
+            {
+                if (!AreSameMediaItem(currentVisibleMedia[index], refreshedVisibleMedia[index]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool AreSameMediaItem(DriveItem first, DriveItem second)
+        {
+            return string.Equals(first.Id, second.Id, StringComparison.Ordinal) &&
+                string.Equals(first.Name, second.Name, StringComparison.Ordinal) &&
+                first.IsFolder == second.IsFolder &&
+                first.Size == second.Size &&
+                string.Equals(first.Created, second.Created, StringComparison.Ordinal) &&
+                string.Equals(first.LastModified, second.LastModified, StringComparison.Ordinal) &&
+                string.Equals(first.OneDriveLocation, second.OneDriveLocation, StringComparison.Ordinal) &&
+                string.Equals(first.DownloadUrl, second.DownloadUrl, StringComparison.Ordinal) &&
+                string.Equals(first.DateTaken, second.DateTaken, StringComparison.Ordinal) &&
+                string.Equals(first.MimeType, second.MimeType, StringComparison.Ordinal) &&
+                string.Equals(first.ThumbnailUrl, second.ThumbnailUrl, StringComparison.Ordinal) &&
+                first.IsDeleted == second.IsDeleted;
         }
 
         private void SetSyncStatus(string text)
