@@ -89,7 +89,7 @@ namespace LiveDrive.Pages
 
         private void CollectionsList_ItemClick(object sender, ItemClickEventArgs e)
         {
-            Frame.Navigate(typeof(PhotosPage), (PhotoCollection)e.ClickedItem);
+            Frame.Navigate(typeof(PhotoContextPage), (PhotoCollection)e.ClickedItem);
         }
     }
 }
