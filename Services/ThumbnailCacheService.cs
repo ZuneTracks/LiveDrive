@@ -43,8 +43,7 @@ namespace LiveDrive.Services
             }
 
             await queuedTask;
-            await _photoIndex.RestoreCachedThumbnailUrisAsync(
-                new[] { item }, true, _cancellation.Token);
+            await _photoIndex.RestoreCachedThumbnailUriAsync(item, _cancellation.Token);
         }
 
         private async Task DownloadAsync(DriveItem item, string key)

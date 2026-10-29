@@ -77,8 +77,8 @@ namespace LiveDrive.Pages
                         .FirstOrDefault(item => item != null);
                     if (cover != null)
                     {
-                        await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                            new[] { cover }, false, CancellationToken.None);
+                        await _services.PhotoIndex.RestoreCachedThumbnailUriAsync(
+                            cover, CancellationToken.None);
                         album.CoverThumbnailUrl = cover.ThumbnailUrl;
                         _ = CacheAlbumCoverAsync(album, cover);
                     }

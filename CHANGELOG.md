@@ -6,8 +6,8 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
-- Photos, Videos, and album covers now verify cached thumbnail files before displaying
-  them, preserve high-quality thumbnails over lower-quality versions, and coalesce
+- Photos, Videos, and album covers now restore cached thumbnails in a single directory
+  scan, preserve high-quality thumbnails over lower-quality versions, and coalesce
   simultaneous thumbnail requests for the same item.
 - Camera Backup diagnostics now include a copyable status snapshot for registration,
   enrollment, activation, lock, queue, resumable-upload, outcome, and timing state.
