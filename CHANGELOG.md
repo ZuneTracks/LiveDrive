@@ -8,7 +8,8 @@ All notable user-facing changes are documented here.
 
 - Returning to a cached Photos or Videos page now preserves its displayed grid while
   LiveDrive checks OneDrive for changes; the grid updates only when that check changes
-  the media currently being shown.
+  the media currently being shown, while thumbnail warm-up continues for uncached
+  high-quality images.
 - Photos, Videos, and album/collection results now use their footer loading indicator
   exclusively, keeping the media grid free of a duplicate central loading message.
 - Photos and Videos now retain independent cached grid pages when switching sections,
