@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Helpers;
@@ -509,43 +510,108 @@ namespace LiveDrive.Pages
 
         private async void BackupDiagnosticsButton_Click(object sender, RoutedEventArgs e)
         {
-            var entries = await _services.CameraBackupState.LoadDiagnosticsAsync();
+            try
+            {
+                var entries = await _services.CameraBackupState.LoadDiagnosticsAsync();
+                var text = await BuildBackupDiagnosticReportAsync(entries);
+                var log = new TextBox
+                {
+                    Text = text,
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap,
+                    AcceptsReturn = true,
+                    Height = 360
+                };
+                var dialog = new ContentDialog
+                {
+                    Title = "Camera Backup diagnostics",
+                    Content = log,
+                    PrimaryButtonText = "Copy",
+                    CloseButtonText = "Close"
+                };
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    var package = new DataPackage();
+                    package.SetText(text);
+                    Clipboard.SetContent(package);
+                    await PageFeedback.ShowInfoAsync("Camera Backup diagnostics copied.");
+                }
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task<string> BuildBackupDiagnosticReportAsync(IReadOnlyList<string> entries)
+        {
+            var state = _services.CameraBackupState;
+            var queueItems = await LoadScheduledQueueItemsAsync();
+            var readyCount = queueItems.Count(item => !item.IsAwaitingRetry);
+            var deferredCount = queueItems.Count(item => item.IsAwaitingRetry);
+            var largeUpload = queueItems.FirstOrDefault(item => item.IsLargeUploadInProgress);
+            var summary = new StringBuilder();
+            summary.AppendLine("Status snapshot");
+            summary.AppendLine("Scheduled backup: " + (_services.CameraBackupScheduler.IsEnabled ? "on" : "off") +
+                "; Windows task: " + (_services.CameraBackupScheduler.IsRegistered ? "registered." : "not registered."));
+            summary.AppendLine("Enrollment cutoff: " + FormatDiagnosticTimestamp(
+                state.GetScheduledBackupEnrollment(), "not recorded; existing automatic discovery is unchanged."));
+            summary.AppendLine("Last activation: " + FormatDiagnosticTimestamp(
+                state.GetLastBackgroundActivation(), "not recorded."));
+            summary.AppendLine("Last execution time: " + FormatDiagnosticDuration(
+                state.GetLastBackgroundDuration(), "not recorded."));
+            summary.AppendLine("Last lock status: " + FormatDiagnosticValue(
+                state.GetLastBackgroundLockStatus(), "not recorded."));
+            summary.AppendLine("Last scan started: " + FormatDiagnosticTimestamp(
+                state.GetLastScanStarted(), "not recorded."));
+            summary.AppendLine("Last upload chunk: " + FormatDiagnosticDuration(
+                state.GetLastLargeUploadChunkDuration(), "not recorded."));
+            summary.AppendLine("Queue: " + queueItems.Count + " total; " + readyCount + " ready; " +
+                deferredCount + " deferred." +
+                (largeUpload == null ? string.Empty : " Resumable upload: " + largeUpload.Status));
+            summary.AppendLine("Last outcome: " + FormatDiagnosticValue(
+                state.GetLastResult(), "not recorded."));
+            summary.AppendLine();
+            summary.AppendLine("Event log");
             if (entries.Count == 0)
             {
-                await PageFeedback.ShowInfoAsync(
-                    "No Camera Backup diagnostic events have been recorded yet.");
-                return;
+                summary.Append("No Camera Backup diagnostic events have been recorded yet.");
             }
+            else
+            {
+                summary.Append(string.Join(Environment.NewLine, entries));
+            }
+            return summary.ToString();
+        }
 
-            var text = string.Join(Environment.NewLine, entries);
-            var log = new TextBox
-            {
-                Text = text,
-                IsReadOnly = true,
-                TextWrapping = TextWrapping.Wrap,
-                AcceptsReturn = true,
-                Height = 360
-            };
-            var dialog = new ContentDialog
-            {
-                Title = "Camera Backup diagnostics",
-                Content = log,
-                PrimaryButtonText = "Copy",
-                CloseButtonText = "Close"
-            };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            {
-                var package = new DataPackage();
-                package.SetText(text);
-                Clipboard.SetContent(package);
-                await PageFeedback.ShowInfoAsync("Camera Backup diagnostics copied.");
-            }
+        private static string FormatDiagnosticTimestamp(DateTimeOffset? timestamp, string fallback)
+        {
+            return timestamp.HasValue ? timestamp.Value.ToLocalTime().ToString("g") + "." : fallback;
+        }
+
+        private static string FormatDiagnosticDuration(TimeSpan? duration, string fallback)
+        {
+            return duration.HasValue
+                ? Math.Max(0, (int)Math.Round(duration.Value.TotalMilliseconds)) + " ms."
+                : fallback;
+        }
+
+        private static string FormatDiagnosticValue(string value, string fallback)
+        {
+            return string.IsNullOrEmpty(value) ? fallback : value;
         }
 
         private async void ClearDiagnosticsButton_Click(object sender, RoutedEventArgs e)
         {
-            await _services.CameraBackupState.ClearDiagnosticsAsync();
-            await PageFeedback.ShowInfoAsync("Camera Backup diagnostics cleared.");
+            try
+            {
+                await _services.CameraBackupState.ClearDiagnosticsAsync();
+                await PageFeedback.ShowInfoAsync("Camera Backup diagnostics cleared.");
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
         }
 
         private async Task CheckCameraRollAsync()

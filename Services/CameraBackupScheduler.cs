@@ -59,6 +59,13 @@ namespace LiveDrive.Services
                 throw new InvalidOperationException("Windows did not allow scheduled camera backup.");
             }
 
+            if (_state.EnsureScheduledBackupEnrollment(DateTimeOffset.UtcNow))
+            {
+                await _state.AppendDiagnosticAsync(
+                    "Scheduled backup enrollment recorded",
+                    "Automatic backup will include newly created Camera Roll items.");
+            }
+
             if (!IsRegistered)
             {
                 UnregisterTask(TaskName, false);

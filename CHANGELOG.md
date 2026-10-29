@@ -6,6 +6,10 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Camera Backup diagnostics now include a copyable status snapshot for registration,
+  enrollment, activation, lock, queue, resumable-upload, outcome, and timing state.
+- Scheduled Camera Backup now records a per-device enrollment cutoff and ignores
+  automatically discovered Camera Roll files created before that cutoff.
 - Large scheduled Camera Roll uploads now send several persisted 320 KiB chunks while
   their background-time budget permits, instead of one chunk per activation.
 - Scheduled Camera Backup now re-registers a timer that remains registered but has been

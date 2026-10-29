@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Services;
@@ -30,6 +31,7 @@ namespace LiveDrive.BackgroundTasks
         {
             var state = new CameraBackupStateStore();
             var backgroundLockAcquired = false;
+            var executionTimer = Stopwatch.StartNew();
             try
             {
                 state.SaveLastBackgroundActivation(DateTimeOffset.Now);
@@ -42,9 +44,13 @@ namespace LiveDrive.BackgroundTasks
                 }
 
                 await state.AppendDiagnosticAsync("Background task acquiring lock");
+                state.SaveLastBackgroundLockStatus("Acquiring lock.");
                 backgroundLockAcquired = await state.TryAcquireBackgroundRunLockAsync();
                 if (!backgroundLockAcquired)
                 {
+                    state.SaveLastBackgroundLockStatus(
+                        "Waiting for another Camera Roll operation after " +
+                        executionTimer.ElapsedMilliseconds + " ms.");
                     state.SaveLastResult(
                         "Scheduled Camera Roll backup is waiting for another Camera Roll operation to finish.");
                     await state.AppendDiagnosticAsync(
@@ -52,11 +58,16 @@ namespace LiveDrive.BackgroundTasks
                     return;
                 }
 
-                await state.AppendDiagnosticAsync("Background task lock acquired");
+                state.SaveLastBackgroundLockStatus(
+                    "Acquired after " + executionTimer.ElapsedMilliseconds + " ms.");
+                await state.AppendDiagnosticAsync(
+                    "Background task lock acquired", executionTimer.ElapsedMilliseconds + " ms.");
                 var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
                 var backup = new CameraBackupService(graph, new CameraUploadHistoryStore(), state);
                 var uploadedCount = await backup.UploadPendingCameraRollItemsAsync(cancellation.Token);
-                await state.AppendDiagnosticAsync("Background task completed", "Uploaded " + uploadedCount + " item(s).");
+                await state.AppendDiagnosticAsync(
+                    "Background task completed",
+                    "Uploaded " + uploadedCount + " item(s) in " + executionTimer.ElapsedMilliseconds + " ms.");
                 if (uploadedCount > 0)
                 {
                     SubmitCompletionToast(state, uploadedCount);
@@ -73,8 +84,9 @@ namespace LiveDrive.BackgroundTasks
                 await state.AppendDiagnosticAsync(
                     "Background task cancelled",
                     reason.HasValue
-                        ? reason.Value.ToString()
-                        : exception.GetType().Name + " without a Windows cancellation signal.");
+                        ? reason.Value + " after " + executionTimer.ElapsedMilliseconds + " ms."
+                        : exception.GetType().Name + " without a Windows cancellation signal after " +
+                          executionTimer.ElapsedMilliseconds + " ms.");
             }
             catch (Exception exception)
             {
@@ -88,6 +100,7 @@ namespace LiveDrive.BackgroundTasks
             }
             finally
             {
+                state.SaveLastBackgroundDuration(executionTimer.Elapsed);
                 if (backgroundLockAcquired)
                 {
                     await state.ReleaseBackgroundRunLockAsync();
