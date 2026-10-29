@@ -1,0 +1,1506 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using LiveDrive.Helpers;
+using LiveDrive.Models;
+using LiveDrive.Services;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.System;
+using Windows.UI.Input;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Input;
+using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Navigation;
+
+namespace LiveDrive.Pages
+{
+    public partial class VideosPage : Page
+    {
+        private readonly AppServices _services;
+        private const string ThumbnailSizeSettingName = "PhotoThumbnailSize";
+        private const string PhotoSortSettingName = "PhotoSort";
+        private const int InitialPhotoBatchSize = 150;
+        private const int PhotoBatchSize = 100;
+        private static readonly HashSet<string> VideoExtensions = new HashSet<string>(
+            new[] { ".mp4", ".mov" }, StringComparer.OrdinalIgnoreCase);
+        private bool _isLoading;
+        private bool _isSelecting;
+        private bool _isDeletingPhotos;
+        private bool _thumbnailErrorShown;
+        private string _thumbnailSize;
+        private string _photoSort;
+        private List<DriveItem> _allPhotos = new List<DriveItem>();
+        private int _displayedPhotoCount;
+        private bool _isAppendingPhotoBatch;
+        private bool _hasFullPhotoIndex;
+        private int _thumbnailWarmupVersion;
+        private List<DriveItem> _mediaItems = new List<DriveItem>();
+        private string _selectedMonthKey;
+        private ScrollViewer _photoScrollViewer;
+        private PhotoAlbum _album;
+        private PhotoCollection _collection;
+        private bool _showVideos;
+        private FrameworkElement _lastHeldPhotoTile;
+        private DateTimeOffset _lastPhotoHoldStarted;
+        private readonly DataTransferManager _shareManager;
+        private bool _isShareManagerSubscribed;
+        private StorageFile _shareFile;
+        private string _shareTitle;
+        private readonly HashSet<string> _queuedThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _unavailableThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
+        public ObservableCollection<DriveItem> Photos { get; } = new ObservableCollection<DriveItem>();
+
+        public VideosPage()
+        {
+            InitializeComponent();
+            _services = ((App)Application.Current).Services;
+            _shareManager = DataTransferManager.GetForCurrentView();
+            ApplyThumbnailSize(ApplicationData.Current.LocalSettings.Values[ThumbnailSizeSettingName] as string);
+            ApplyPhotoSort(ApplicationData.Current.LocalSettings.Values[PhotoSortSettingName] as string);
+            NavigationCacheMode = NavigationCacheMode.Required;
+            PhotosGrid.Loaded += (sender, args) =>
+            {
+                ApplyThumbnailSize(_thumbnailSize);
+                AttachPhotoScrollViewer();
+            };
+            Loaded += async (sender, args) => await LoadPhotosAsync();
+        }
+
+        private async void RefreshButton_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadPhotosAsync();
+        }
+
+        private async void IndexDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var entries = await _services.PhotoIndexDiagnostics.LoadAsync();
+            var text = entries.Count == 0
+                ? "No Photos or Videos index diagnostic events have been recorded yet."
+                : string.Join(Environment.NewLine, entries);
+            var log = new TextBox
+            {
+                Text = text,
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = true,
+                Height = 360
+            };
+            var dialog = new ContentDialog
+            {
+                Title = "Photos and Videos index diagnostics",
+                Content = log,
+                PrimaryButtonText = entries.Count == 0 ? null : "Copy",
+                CloseButtonText = "Close"
+            };
+            if (entries.Count > 0 && await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                var package = new DataPackage();
+                package.SetText(text);
+                Clipboard.SetContent(package);
+                await PageFeedback.ShowInfoAsync("Photos and Videos index diagnostics copied.");
+            }
+            else if (entries.Count == 0)
+            {
+                await dialog.ShowAsync();
+            }
+        }
+
+        private async void ClearIndexDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _services.PhotoIndexDiagnostics.ClearAsync();
+            await PageFeedback.ShowInfoAsync("Photos and Videos index diagnostics cleared.");
+        }
+
+        private void BackButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Frame.CanGoBack)
+            {
+                Frame.GoBack();
+            }
+        }
+
+        private async void SourceFoldersButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading)
+            {
+                return;
+            }
+
+            try
+            {
+                var snapshot = await _services.PhotoIndex.LoadAsync();
+                var sources = await PromptForSourceFoldersAsync(snapshot.SourceFolders);
+                if (sources == null)
+                {
+                    return;
+                }
+
+                var existingSourceIds = new HashSet<string>(snapshot.SourceFolders.Select(source => source.Id), StringComparer.Ordinal);
+                var selectedSourceIds = new HashSet<string>(sources.Select(source => source.Id), StringComparer.Ordinal);
+                if (existingSourceIds.SetEquals(selectedSourceIds))
+                {
+                    return;
+                }
+
+                await _services.PhotoIndex.ClearAsync();
+                await _services.PhotoIndex.SaveAsync(new List<DriveItem>(), sources);
+                _selectedMonthKey = null;
+                RenderPhotos(new List<DriveItem>());
+                await LoadPhotosAsync();
+            }
+            catch (Exception exception)
+            {
+                await _services.PhotoIndexDiagnostics.AppendAsync(
+                    "Index refresh failed",
+                    exception.GetType().Name + " (0x" + exception.HResult.ToString("X8") + "): " +
+                    exception.Message);
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private void ThumbnailSize_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyThumbnailSize((sender as FrameworkElement).Tag as string);
+        }
+
+        private async void PhotoSort_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyPhotoSort((sender as FrameworkElement).Tag as string);
+            RenderFilteredPhotos();
+            if (_album == null && _collection == null)
+            {
+                await _services.PhotoIndex.SavePreviewAsync(_mediaItems);
+            }
+        }
+
+        private async void DateNavigationButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading)
+            {
+                return;
+            }
+
+            var months = GetAvailableMonths();
+            if (months.Count == 0)
+            {
+                await PageFeedback.ShowInfoAsync(
+                    "No dated " + GetMediaTypeLabel() + " are available to jump to yet.");
+                return;
+            }
+
+            var monthList = new ListView
+            {
+                ItemsSource = months,
+                ItemTemplate = Resources["MonthNavigationItemTemplate"] as DataTemplate,
+                IsItemClickEnabled = true,
+                SelectionMode = ListViewSelectionMode.None,
+                Height = 360
+            };
+            var content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = "Choose a month to show in " + (_showVideos ? "Videos" : "Photos") + ".",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+            content.Children.Add(monthList);
+            var dialog = new ContentDialog
+            {
+                Title = "Jump to date",
+                Content = content,
+                SecondaryButtonText = "All dates",
+                IsSecondaryButtonEnabled = !string.IsNullOrEmpty(_selectedMonthKey),
+                CloseButtonText = "Cancel"
+            };
+            PhotoCollection selectedMonth = null;
+            monthList.ItemClick += (list, args) =>
+            {
+                selectedMonth = args.ClickedItem as PhotoCollection;
+                dialog.Hide();
+            };
+
+            var result = await dialog.ShowAsync();
+            if (selectedMonth != null)
+            {
+                _selectedMonthKey = selectedMonth.MonthKey;
+            }
+            else if (result == ContentDialogResult.Secondary)
+            {
+                _selectedMonthKey = null;
+            }
+            else
+            {
+                return;
+            }
+
+            ExitSelectionMode();
+            RenderFilteredPhotos();
+            SetEmptyMessage();
+            EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ApplyThumbnailSize(string size)
+        {
+            var normalizedSize = size == "Small" || size == "Large" ? size : "Medium";
+            _thumbnailSize = normalizedSize;
+            var panel = PhotosGrid.ItemsPanelRoot as ItemsWrapGrid;
+            if (normalizedSize == "Small")
+            {
+                SetThumbnailDimensions(panel, 96, 126);
+            }
+            else if (normalizedSize == "Large")
+            {
+                SetThumbnailDimensions(panel, 216, 246);
+            }
+            else
+            {
+                SetThumbnailDimensions(panel, 144, 174);
+            }
+
+            ApplicationData.Current.LocalSettings.Values[ThumbnailSizeSettingName] = normalizedSize;
+            ViewButton.Label = normalizedSize;
+            QueueVisibleThumbnailCaching();
+        }
+
+        private void ApplyPhotoSort(string sort)
+        {
+            _photoSort = sort == "DateTakenOldest" || sort == "ModifiedNewest" ||
+                         sort == "NameAscending" || sort == "NameDescending"
+                ? sort
+                : "DateTakenNewest";
+            ApplicationData.Current.LocalSettings.Values[PhotoSortSettingName] = _photoSort;
+            SortButton.Label = GetPhotoSortLabel(_photoSort);
+        }
+
+        private static void SetThumbnailDimensions(ItemsWrapGrid panel, double width, double height)
+        {
+            if (panel == null)
+            {
+                return;
+            }
+            panel.ItemWidth = width;
+            panel.ItemHeight = height;
+        }
+
+        private void AttachPhotoScrollViewer()
+        {
+            if (_photoScrollViewer != null)
+            {
+                return;
+            }
+
+            _photoScrollViewer = FindVisualChild<ScrollViewer>(PhotosGrid);
+            if (_photoScrollViewer != null)
+            {
+                _photoScrollViewer.ViewChanged += PhotosGrid_ViewChanged;
+            }
+        }
+
+        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            var childCount = VisualTreeHelper.GetChildrenCount(parent);
+            for (var index = 0; index < childCount; index++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, index);
+                var matchingChild = child as T;
+                if (matchingChild != null)
+                {
+                    return matchingChild;
+                }
+
+                var descendant = FindVisualChild<T>(child);
+                if (descendant != null)
+                {
+                    return descendant;
+                }
+            }
+            return null;
+        }
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
+        {
+            SubscribeShareManager();
+            _album = e.Parameter as PhotoAlbum;
+            _collection = e.Parameter as PhotoCollection;
+            _showVideos = IsVideoLibraryPage || string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
+            PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title :
+                _showVideos ? "Videos" : "Photos";
+            LoadingText.Text = _showVideos ? "Loading your videos…" : "Loading your photos…";
+            BackButton.Visibility = (_album != null || _collection != null) && Frame.CanGoBack
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            AlbumInfoText.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
+            RemoveFromAlbumButton.Visibility = _album != null ? Visibility.Visible : Visibility.Collapsed;
+            DateNavigationButton.Visibility = _album == null && _collection == null
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            UpdateDateNavigationButton();
+            IndexDiagnosticsButton.Visibility = DiagnosticsSettings.ShowTools
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            ClearIndexDiagnosticsButton.Visibility = DiagnosticsSettings.ShowTools
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            SetEmptyMessage();
+            base.OnNavigatedTo(e);
+        }
+
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            if (_isShareManagerSubscribed)
+            {
+                _shareManager.DataRequested -= ShareManager_DataRequested;
+                _isShareManagerSubscribed = false;
+            }
+            base.OnNavigatedFrom(e);
+        }
+
+        protected virtual bool IsVideoLibraryPage => true;
+
+        private void SubscribeShareManager()
+        {
+            if (!_isShareManagerSubscribed)
+            {
+                _shareManager.DataRequested += ShareManager_DataRequested;
+                _isShareManagerSubscribed = true;
+            }
+        }
+
+        private async Task LoadPhotosAsync()
+        {
+            if (_isLoading)
+            {
+                return;
+            }
+
+            _isLoading = true;
+            LoadingPanel.Visibility = Visibility.Visible;
+            SyncStatusPanel.Visibility = Visibility.Visible;
+            EmptyPanel.Visibility = Visibility.Collapsed;
+            try
+            {
+                var hasPreview = false;
+                if (_album == null && _collection == null)
+                {
+                    var preview = await _services.PhotoIndex.LoadPreviewAsync();
+                    var filteredPreview = FilterPhotos(preview).ToList();
+                    if (filteredPreview.Count > 0)
+                    {
+                        await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
+                            filteredPreview, CancellationToken.None);
+                        RenderPhotos(filteredPreview);
+                        LoadingPanel.Visibility = Visibility.Collapsed;
+                        SetSyncStatus(GetCachedMediaStatus("Loading your library…"));
+                        hasPreview = true;
+                    }
+                }
+
+                var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
+                await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
+                    snapshot.Items, CancellationToken.None);
+                _hasFullPhotoIndex = true;
+                if (snapshot.SourceFolders.Count == 0)
+                {
+                    var sources = await PromptForSourceFoldersAsync();
+                    if (sources == null)
+                    {
+                        ShowFolderSelectionRequired();
+                        return;
+                    }
+
+                    await _services.PhotoIndex.ClearAsync();
+                    snapshot = new PhotoIndexSnapshot
+                    {
+                        Items = new List<DriveItem>(),
+                        SourceFolders = sources
+                    };
+                    await _services.PhotoIndex.SaveAsync(snapshot.Items, snapshot.SourceFolders);
+                }
+
+                if (_album != null || _collection != null)
+                {
+                    RenderPhotos(FilterPhotos(snapshot.Items));
+                    SetSyncStatus(GetCachedMediaStatus());
+                    SetEmptyMessage();
+                    EmptyPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                    return;
+                }
+                RenderPhotos(FilterPhotos(snapshot.Items));
+                LoadingPanel.Visibility = Photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                SetSyncStatus(Photos.Count == 0
+                    ? "Finding " + GetMediaTypeLabel() + " across your drive…"
+                    : GetCachedMediaStatus("Checking for updates…"));
+                if (!hasPreview)
+                {
+                    await _services.PhotoIndex.SavePreviewAsync(snapshot.Items);
+                }
+
+                var indexedPhotos = snapshot.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
+                var hasVisiblePhotos = Photos.Count > 0;
+                var lastPublished = DateTimeOffset.UtcNow;
+                await _services.PhotoIndexDiagnostics.AppendAsync(
+                    "Index refresh started",
+                    snapshot.SourceFolders.Count + " source folder(s), " + indexedPhotos.Count + " cached item(s).");
+
+                foreach (var source in snapshot.SourceFolders)
+                {
+                    var nextLink = source.DeltaLink;
+                    string deltaLink = null;
+                    var pageCount = 0;
+                    var deltaItemCount = 0;
+                    var videoItemCount = 0;
+                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                        "Source delta started",
+                        source.Name + " (cached link: " + (!string.IsNullOrEmpty(nextLink)) + ").");
+                    do
+                    {
+                        var page = await _services.Graph.GetPhotoDeltaPageAsync(nextLink, source.Id);
+                        pageCount++;
+                        foreach (var item in page.Items)
+                        {
+                            deltaItemCount++;
+                            if (item.IsDeleted)
+                            {
+                                var removed = indexedPhotos.Remove(item.Id);
+                                await _services.PhotoIndexDiagnostics.AppendAsync(
+                                    "Delta deletion",
+                                    source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
+                                    "] was " + (removed ? "removed from" : "not found in") + " the index.");
+                                await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
+                            }
+                            else if (IsMediaFile(item))
+                            {
+                                if (IsVideoFile(item))
+                                {
+                                    videoItemCount++;
+                                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                                        "Delta video indexed",
+                                        source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
+                                        "], MIME: " + GetDiagnosticMimeType(item.MimeType) + ".");
+                                }
+                                DriveItem existingItem;
+                                if (indexedPhotos.TryGetValue(item.Id, out existingItem))
+                                {
+                                    item.ThumbnailUrl = existingItem.ThumbnailUrl;
+                                }
+                                indexedPhotos[item.Id] = item;
+                                _unavailableThumbnailKeys.Remove(item.Id + "|medium");
+                                _unavailableThumbnailKeys.Remove(item.Id + "|large");
+                            }
+                            else
+                            {
+                                if (VideoExtensions.Contains(Path.GetExtension(item.Name)))
+                                {
+                                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                                        "Delta video ignored",
+                                        source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
+                                        "], MIME: " + GetDiagnosticMimeType(item.MimeType) + ".");
+                                }
+                                if (indexedPhotos.Remove(item.Id))
+                                {
+                                }
+                            }
+                        }
+
+                        if (!hasVisiblePhotos && FilterPhotos(indexedPhotos.Values).Any())
+                        {
+                            RenderPhotos(FilterPhotos(indexedPhotos.Values));
+                            LoadingPanel.Visibility = Visibility.Collapsed;
+                            hasVisiblePhotos = true;
+                        }
+
+                        nextLink = page.NextLink;
+                        if (DateTimeOffset.UtcNow - lastPublished >= TimeSpan.FromSeconds(3))
+                        {
+                            SetSyncStatus("Found " + indexedPhotos.Count + " " + GetMediaTypeLabel() +
+                                ". Scanning " + source.Name + "…");
+                            lastPublished = DateTimeOffset.UtcNow;
+                        }
+
+                        if (!string.IsNullOrEmpty(page.DeltaLink))
+                        {
+                            deltaLink = page.DeltaLink;
+                        }
+                    }
+                    while (!string.IsNullOrEmpty(nextLink));
+
+                    if (!string.IsNullOrEmpty(deltaLink))
+                    {
+                        source.DeltaLink = deltaLink;
+                    }
+
+                    await _services.PhotoIndexDiagnostics.AppendAsync(
+                        "Source delta completed",
+                        source.Name + ": " + pageCount + " page(s), " + deltaItemCount +
+                        " item(s), " + videoItemCount + " video item(s).");
+                }
+
+                RenderPhotos(FilterPhotos(indexedPhotos.Values));
+                LoadingPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                await _services.PhotoIndex.SaveAsync(indexedPhotos.Values, snapshot.SourceFolders);
+                await _services.PhotoIndexDiagnostics.AppendAsync(
+                    "Index refresh completed",
+                    indexedPhotos.Count + " media item(s), " +
+                    indexedPhotos.Values.Count(IsVideoFile) + " video item(s).");
+                EmptyPanel.Visibility = _allPhotos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+            finally
+            {
+                LoadingPanel.Visibility = Visibility.Collapsed;
+                SyncStatusPanel.Visibility = Visibility.Collapsed;
+                _isLoading = false;
+            }
+        }
+
+        private void SetSyncStatus(string text)
+        {
+            LoadingText.Text = text;
+            SyncStatusText.Text = text;
+        }
+
+        private string GetCachedMediaStatus(string suffix = null)
+        {
+            return "Showing cached " + GetMediaTypeLabel() +
+                (string.IsNullOrEmpty(suffix) ? "." : ". " + suffix);
+        }
+
+        private string GetMediaTypeLabel()
+        {
+            return _showVideos ? "videos" : "photos";
+        }
+
+        private async Task<List<PhotoSourceFolder>> PromptForSourceFoldersAsync(
+            IEnumerable<PhotoSourceFolder> existingSources = null)
+        {
+            var selected = new Dictionary<string, PhotoSourceFolder>(StringComparer.Ordinal);
+            foreach (var source in existingSources ?? Enumerable.Empty<PhotoSourceFolder>())
+            {
+                selected[source.Id] = new PhotoSourceFolder { Id = source.Id, Name = source.Name };
+            }
+            var managesExistingSources = selected.Count > 0;
+            var history = new List<PhotoSourceFolder>();
+            var folderList = new ListView { SelectionMode = ListViewSelectionMode.None, Height = 320 };
+            var folderPath = new TextBlock { Text = "OneDrive", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var backButton = new Button { Content = "Back", IsEnabled = false, Margin = new Thickness(0, 0, 8, 0) };
+            var navigation = new StackPanel { Orientation = Orientation.Horizontal };
+            navigation.Children.Add(backButton);
+            navigation.Children.Add(folderPath);
+            var content = new StackPanel();
+            content.Children.Add(new TextBlock
+            {
+                Text = !managesExistingSources
+                    ? "Select each folder whose photos and videos LiveDrive should include. Open a folder to choose a nested photo folder."
+                    : "Select folders to include in Photos. Clear a selected folder to remove its photos from this device's Photos view.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+            content.Children.Add(navigation);
+            content.Children.Add(folderList);
+            var dialog = new ContentDialog
+            {
+                Title = managesExistingSources ? "Manage photo folders" : "Choose photo folders",
+                Content = content,
+                PrimaryButtonText = managesExistingSources ? "Save folders" : "Use selected folders",
+                CloseButtonText = "Cancel",
+                IsPrimaryButtonEnabled = managesExistingSources
+            };
+
+            Func<string, string, Task> loadFolder = null;
+            loadFolder = async (folderId, folderName) =>
+            {
+                folderList.Items.Clear();
+                folderPath.Text = history.Count == 0
+                    ? "OneDrive"
+                    : string.Join(" / ", history.Select(folder => folder.Name));
+                backButton.IsEnabled = history.Count > 0;
+                var folders = (await _services.Graph.GetChildrenAsync(folderId))
+                    .Where(item => item.IsFolder)
+                    .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (folders.Count == 0)
+                {
+                    folderList.Items.Add(new TextBlock
+                    {
+                        Text = "No subfolders here.",
+                        Opacity = 0.65,
+                        Margin = new Thickness(12)
+                    });
+                    return;
+                }
+
+                foreach (var folder in folders)
+                {
+                    var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    row.ColumnDefinitions.Add(new ColumnDefinition());
+                    var selector = new CheckBox
+                    {
+                        IsChecked = selected.ContainsKey(folder.Id),
+                        Tag = folder,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(8)
+                    };
+                    selector.Checked += (sender, args) =>
+                    {
+                        selected[folder.Id] = new PhotoSourceFolder { Id = folder.Id, Name = folder.Name };
+                        dialog.IsPrimaryButtonEnabled = true;
+                    };
+                    selector.Unchecked += (sender, args) =>
+                    {
+                        selected.Remove(folder.Id);
+                        dialog.IsPrimaryButtonEnabled = managesExistingSources || selected.Count > 0;
+                    };
+                    var openButton = new Button
+                    {
+                        Content = folder.Name,
+                        Tag = folder,
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        HorizontalContentAlignment = HorizontalAlignment.Left
+                    };
+                    openButton.Click += async (sender, args) =>
+                    {
+                        history.Add(new PhotoSourceFolder { Id = folder.Id, Name = folder.Name });
+                        await loadFolder(folder.Id, folder.Name);
+                    };
+                    Grid.SetColumn(selector, 0);
+                    Grid.SetColumn(openButton, 1);
+                    row.Children.Add(selector);
+                    row.Children.Add(openButton);
+                    folderList.Items.Add(row);
+                }
+            };
+
+            backButton.Click += async (sender, args) =>
+            {
+                if (history.Count == 0)
+                {
+                    return;
+                }
+                history.RemoveAt(history.Count - 1);
+                var parent = history.LastOrDefault();
+                await loadFolder(parent == null ? string.Empty : parent.Id, parent == null ? "OneDrive" : parent.Name);
+            };
+
+            await loadFolder(string.Empty, "OneDrive");
+            return await dialog.ShowAsync() == ContentDialogResult.Primary && selected.Count > 0
+                ? selected.Values.OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase).ToList()
+                : null;
+        }
+
+        private void ShowFolderSelectionRequired()
+        {
+            Photos.Clear();
+            EmptyTitle.Text = "Choose photo folders to begin.";
+            EmptyDescription.Text = "LiveDrive will only scan folders you select.";
+            EmptyPanel.Visibility = Visibility.Visible;
+        }
+
+        private async void PhotosGrid_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+        {
+            if (args.InRecycleQueue)
+            {
+                return;
+            }
+
+            await CacheVisibleThumbnailAsync(args.Item as DriveItem);
+        }
+
+        private void QueueVisibleThumbnailCaching()
+        {
+            if (!_hasFullPhotoIndex || _thumbnailSize != "Large")
+            {
+                return;
+            }
+
+            for (var index = 0; index < PhotosGrid.Items.Count; index++)
+            {
+                var container = PhotosGrid.ContainerFromIndex(index) as FrameworkElement;
+                var item = container == null ? null : container.DataContext as DriveItem;
+                if (item != null)
+                {
+                    _ = CacheVisibleThumbnailAsync(item);
+                }
+            }
+        }
+
+        private async Task CacheVisibleThumbnailAsync(DriveItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            var preferLarge = _hasFullPhotoIndex && _thumbnailSize == "Large";
+            var cacheKey = item.Id + (preferLarge ? "|large" : "|medium");
+            if (_unavailableThumbnailKeys.Contains(cacheKey) || !_queuedThumbnailKeys.Add(cacheKey))
+            {
+                return;
+            }
+
+            try
+            {
+                await _services.Thumbnails.CacheAsync(item, preferLarge);
+                if (string.IsNullOrEmpty(item.ThumbnailUrl))
+                {
+                    _unavailableThumbnailKeys.Add(cacheKey);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception)
+            {
+                if (!_thumbnailErrorShown)
+                {
+                    _thumbnailErrorShown = true;
+                    SetSyncStatus("Some thumbnails could not be loaded. Refresh to try again.");
+                }
+            }
+            finally
+            {
+                _queuedThumbnailKeys.Remove(cacheKey);
+            }
+        }
+
+        private void PhotoTile_Holding(object sender, HoldingRoutedEventArgs e)
+        {
+            if (e.HoldingState != HoldingState.Started)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            var tile = (FrameworkElement)sender;
+            var item = tile.Tag as DriveItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            _lastHeldPhotoTile = tile;
+            _lastPhotoHoldStarted = DateTimeOffset.Now;
+            ShowPhotoMenu(tile, item);
+        }
+
+        private void PhotoTile_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var tile = sender as FrameworkElement;
+            if (ReferenceEquals(tile, _lastHeldPhotoTile))
+            {
+                _lastHeldPhotoTile = null;
+                if (DateTimeOffset.Now - _lastPhotoHoldStarted < TimeSpan.FromSeconds(2))
+                {
+                    return;
+                }
+            }
+
+            var item = tile?.Tag as DriveItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            ShowPhotoMenu(tile, item);
+        }
+
+        private void ShowPhotoMenu(FrameworkElement tile, DriveItem item)
+        {
+            var menu = new MenuFlyout();
+            var view = new MenuFlyoutItem { Text = "View" };
+            view.Click += async (menuSender, menuArgs) => await ViewPhotoAsync(item);
+            var fileInfo = new MenuFlyoutItem { Text = "File info" };
+            fileInfo.Click += async (menuSender, menuArgs) => await FileInfoDialog.ShowAsync(item);
+            var addToAlbum = new MenuFlyoutItem { Text = "Add to album" };
+            addToAlbum.Click += async (menuSender, menuArgs) => await AddPhotosToAlbumAsync(new[] { item });
+            if (_album != null)
+            {
+                var removeFromAlbum = new MenuFlyoutItem { Text = "Remove from album" };
+                removeFromAlbum.Click += async (menuSender, menuArgs) => await RemovePhotosFromAlbumAsync(new[] { item });
+                menu.Items.Add(removeFromAlbum);
+            }
+            var saveAs = new MenuFlyoutItem { Text = "Save as" };
+            saveAs.Click += async (menuSender, menuArgs) => await SavePhotoAsAsync(item);
+            var share = new MenuFlyoutItem { Text = "Share" };
+            share.Click += async (menuSender, menuArgs) => await SharePhotoAsync(item);
+            var copy = new MenuFlyoutItem { Text = "Copy" };
+            copy.Click += async (menuSender, menuArgs) => await CopyOrMovePhotoAsync(item, false);
+            var move = new MenuFlyoutItem { Text = "Move" };
+            move.Click += async (menuSender, menuArgs) => await CopyOrMovePhotoAsync(item, true);
+            var delete = new MenuFlyoutItem { Text = "Delete" };
+            delete.Click += async (menuSender, menuArgs) => await DeletePhotoAsync(item);
+            menu.Items.Add(view);
+            menu.Items.Add(fileInfo);
+            menu.Items.Add(addToAlbum);
+            menu.Items.Add(saveAs);
+            menu.Items.Add(share);
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(copy);
+            menu.Items.Add(move);
+            menu.Items.Add(delete);
+            menu.ShowAt(tile);
+        }
+
+        private async Task ViewPhotoAsync(DriveItem item)
+        {
+            if (IsImageFile(item))
+            {
+                var images = _allPhotos.Where(IsImageFile).ToList();
+                var selectedIndex = images.FindIndex(photo => photo.Id == item.Id);
+                if (selectedIndex >= 0)
+                {
+                    Frame.Navigate(typeof(PhotoViewerPage), new PhotoViewerRequest
+                    {
+                        Items = images,
+                        SelectedIndex = selectedIndex
+                    });
+                    return;
+                }
+            }
+
+            try
+            {
+                var file = await CreateTemporaryPhotoFileAsync(item.Name);
+                await _services.Graph.DownloadToAsync(item, file);
+                if (!await Launcher.LaunchFileAsync(file))
+                {
+                    await PageFeedback.ShowInfoAsync("No app on this device can open this photo.");
+                }
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task SavePhotoAsAsync(DriveItem item)
+        {
+            try
+            {
+                var picker = new FileSavePicker { SuggestedFileName = item.Name };
+                picker.FileTypeChoices.Add("Photo or video", new[] { GetPhotoExtension(item.Name) });
+                var destination = await picker.PickSaveFileAsync();
+                if (destination != null)
+                {
+                    await _services.Graph.DownloadToAsync(item, destination);
+                    await PageFeedback.ShowInfoAsync("Saved to " + destination.Name + ".");
+                }
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task SharePhotoAsync(DriveItem item)
+        {
+            try
+            {
+                _shareFile = await CreateTemporaryPhotoFileAsync(item.Name);
+                await _services.Graph.DownloadToAsync(item, _shareFile);
+                _shareTitle = item.Name;
+                DataTransferManager.ShowShareUI();
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task CopyOrMovePhotoAsync(DriveItem item, bool move)
+        {
+            try
+            {
+                var destination = await OneDriveFolderPicker.PickAsync(
+                    _services.Graph,
+                    move ? "Choose move destination" : "Choose copy destination",
+                    "Open folders to choose where this photo should be placed.",
+                    move ? "Move here" : "Copy here");
+                if (destination == null)
+                {
+                    return;
+                }
+
+                var destinationId = destination.Id;
+                if (string.IsNullOrEmpty(destinationId))
+                {
+                    destinationId = (await _services.Graph.GetRootFolderAsync()).Id;
+                }
+                if (destinationId == item.Id)
+                {
+                    await PageFeedback.ShowInfoAsync("Choose a different destination folder.");
+                    return;
+                }
+
+                if (move)
+                {
+                    await _services.Graph.MoveAsync(item, destinationId);
+                    Photos.Remove(item);
+                }
+                else
+                {
+                    await _services.Graph.CopyAsync(item, destinationId);
+                }
+                await PageFeedback.ShowInfoAsync((move ? "Moved " : "Copied ") + item.Name + " to " + destination.Name + ".");
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task DeletePhotoAsync(DriveItem item)
+        {
+            await DeletePhotosAsync(new[] { item });
+        }
+
+        private async Task RemovePhotosFromAlbumAsync(IReadOnlyList<DriveItem> photos)
+        {
+            if (_album == null)
+            {
+                return;
+            }
+
+            var items = photos.Where(photo => photo != null && !string.IsNullOrEmpty(photo.Id))
+                .GroupBy(photo => photo.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+            if (items.Count == 0)
+            {
+                return;
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = items.Count == 1 ? "Remove from album?" : "Remove from album?",
+                Content = items.Count == 1
+                    ? "Remove " + items[0].Name + " from " + _album.Name + "? The OneDrive file will remain unchanged."
+                    : "Remove " + items.Count + " items from " + _album.Name + "? The OneDrive files will remain unchanged.",
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel"
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            try
+            {
+                await _services.Albums.RemovePhotosAsync(_album.Id, items.Select(item => item.Id));
+                foreach (var item in items)
+                {
+                    Photos.Remove(item);
+                    _allPhotos.RemoveAll(photo => photo.Id == item.Id);
+                }
+                ClearPhotoSelection();
+                await PageFeedback.ShowInfoAsync(items.Count == 1
+                    ? "Removed from " + _album.Name + "."
+                    : "Removed " + items.Count + " items from " + _album.Name + ".");
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private async Task DeletePhotosAsync(IReadOnlyList<DriveItem> selectedPhotos)
+        {
+            var photosToDelete = selectedPhotos
+                .Where(item => item != null && !string.IsNullOrEmpty(item.Id))
+                .GroupBy(item => item.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+            if (photosToDelete.Count == 0 || _isDeletingPhotos)
+            {
+                return;
+            }
+
+            var count = photosToDelete.Count;
+            var dialog = new ContentDialog
+            {
+                Title = count == 1 ? "Delete file?" : "Delete files?",
+                Content = count == 1
+                    ? "Delete " + photosToDelete[0].Name + " from OneDrive? It can be restored from the OneDrive recycle bin."
+                    : "Delete " + count + " files from OneDrive? They can be restored from the OneDrive recycle bin.",
+                PrimaryButtonText = "Delete",
+                CloseButtonText = "Cancel"
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            try
+            {
+                _isDeletingPhotos = true;
+                DeleteSelectedButton.IsEnabled = false;
+                foreach (var photo in photosToDelete)
+                {
+                    await _services.Graph.DeleteAsync(photo);
+                    Photos.Remove(photo);
+                    _allPhotos.RemoveAll(item => item.Id == photo.Id);
+                    await _services.PhotoIndex.RemoveItemAsync(photo.Id);
+                }
+                ClearPhotoSelection();
+                await PageFeedback.ShowInfoAsync(count == 1
+                    ? "Deleted " + photosToDelete[0].Name + "."
+                    : "Deleted " + count + " files.");
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+            finally
+            {
+                _isDeletingPhotos = false;
+                DeleteSelectedButton.IsEnabled = _isSelecting && PhotosGrid.SelectedItems.Count > 0;
+            }
+        }
+
+        private void ShareManager_DataRequested(DataTransferManager sender, DataRequestedEventArgs args)
+        {
+            if (_shareFile == null)
+            {
+                args.Request.FailWithDisplayText("The selected photo is not ready to share.");
+                return;
+            }
+
+            args.Request.Data.Properties.Title = _shareTitle ?? "LiveDrive photo";
+            args.Request.Data.SetStorageItems(new[] { _shareFile });
+        }
+
+        private void SelectionButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isSelecting)
+            {
+                ExitSelectionMode();
+                return;
+            }
+
+            _isSelecting = true;
+            PhotosGrid.SelectionMode = ListViewSelectionMode.Multiple;
+            PhotosGrid.IsItemClickEnabled = false;
+            SelectionButton.Label = "Done";
+            AddToAlbumButton.IsEnabled = false;
+            DeleteSelectedButton.IsEnabled = false;
+            RemoveFromAlbumButton.IsEnabled = false;
+        }
+
+        private void PhotosGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var hasSelection = _isSelecting && PhotosGrid.SelectedItems.Count > 0;
+            AddToAlbumButton.IsEnabled = hasSelection;
+            DeleteSelectedButton.IsEnabled = hasSelection && !_isDeletingPhotos;
+            RemoveFromAlbumButton.IsEnabled = hasSelection && _album != null;
+        }
+
+        private async void AddToAlbumButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedPhotos = PhotosGrid.SelectedItems.Cast<DriveItem>().ToList();
+            await AddPhotosToAlbumAsync(selectedPhotos);
+        }
+
+        private async void DeleteSelectedButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedPhotos = PhotosGrid.SelectedItems.Cast<DriveItem>().ToList();
+            await DeletePhotosAsync(selectedPhotos);
+        }
+
+        private async void RemoveFromAlbumButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedPhotos = PhotosGrid.SelectedItems.Cast<DriveItem>().ToList();
+            await RemovePhotosFromAlbumAsync(selectedPhotos);
+        }
+
+        private async Task AddPhotosToAlbumAsync(IReadOnlyList<DriveItem> selectedPhotos)
+        {
+            var photosToAdd = selectedPhotos
+                .Where(item => item != null && !string.IsNullOrEmpty(item.Id))
+                .GroupBy(item => item.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+            if (photosToAdd.Count == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                var albums = await _services.Albums.GetAlbumsAsync();
+                if (albums.Count == 0)
+                {
+                    await PageFeedback.ShowInfoAsync("Create an album first, then select photos to add.");
+                    return;
+                }
+
+                var picker = new ListBox
+                {
+                    ItemsSource = albums,
+                    ItemTemplate = Resources["AlbumPickerItemTemplate"] as DataTemplate,
+                    SelectionMode = SelectionMode.Single
+                };
+                var dialog = new ContentDialog
+                {
+                    Title = "Add to album",
+                    Content = picker,
+                    PrimaryButtonText = "Add",
+                    CloseButtonText = "Cancel",
+                    IsPrimaryButtonEnabled = false
+                };
+                picker.SelectionChanged += (sender, args) =>
+                    dialog.IsPrimaryButtonEnabled = picker.SelectedItem is PhotoAlbum;
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+
+                var album = picker.SelectedItem as PhotoAlbum;
+                if (album == null)
+                {
+                    await PageFeedback.ShowInfoAsync("Select an album before adding photos.");
+                    return;
+                }
+
+                await _services.PhotoIndex.EnsureItemsAsync(photosToAdd);
+                await _services.Albums.AddPhotosAsync(album.Id, photosToAdd.Select(item => item.Id));
+                await PageFeedback.ShowInfoAsync("Added " + photosToAdd.Count + " photos to " + album.Name + ".");
+                ClearPhotoSelection();
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+        }
+
+        private void ExitSelectionMode()
+        {
+            ClearPhotoSelection();
+            _isSelecting = false;
+            PhotosGrid.IsItemClickEnabled = true;
+            PhotosGrid.SelectionMode = ListViewSelectionMode.None;
+            SelectionButton.Label = "Select";
+            AddToAlbumButton.IsEnabled = false;
+            DeleteSelectedButton.IsEnabled = false;
+            RemoveFromAlbumButton.IsEnabled = false;
+        }
+
+        private void ClearPhotoSelection()
+        {
+            if (PhotosGrid.SelectionMode != ListViewSelectionMode.None && PhotosGrid.SelectedItems.Count > 0)
+            {
+                PhotosGrid.SelectedItems.Clear();
+            }
+        }
+
+        private void RenderPhotos(IEnumerable<DriveItem> items)
+        {
+            _mediaItems = items.ToList();
+            RenderFilteredPhotos();
+        }
+
+        private void RenderFilteredPhotos()
+        {
+            _thumbnailWarmupVersion++;
+            Photos.Clear();
+            _allPhotos = SortPhotos(FilterBySelectedMonth(_mediaItems)).ToList();
+            _displayedPhotoCount = 0;
+            AppendPhotoBatch(InitialPhotoBatchSize);
+            StartThumbnailWarmup(_thumbnailWarmupVersion);
+            UpdateDateNavigationButton();
+            SetEmptyMessage();
+        }
+
+        private async void StartThumbnailWarmup(int warmupVersion)
+        {
+            if (!_hasFullPhotoIndex || _allPhotos.Count == 0)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            for (var index = 0; index < _allPhotos.Count; index++)
+            {
+                if (warmupVersion != _thumbnailWarmupVersion || _services.Thumbnails.IsSuspended)
+                {
+                    return;
+                }
+
+                await CacheVisibleThumbnailAsync(_allPhotos[index]);
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
+        }
+
+        private void PhotosGrid_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+        {
+            var scrollViewer = sender as ScrollViewer;
+            if (scrollViewer == null || _displayedPhotoCount >= _allPhotos.Count ||
+                scrollViewer.VerticalOffset + scrollViewer.ViewportHeight < scrollViewer.ExtentHeight - 200)
+            {
+                return;
+            }
+            AppendPhotoBatch(PhotoBatchSize);
+        }
+
+        private void AppendPhotoBatch(int batchSize)
+        {
+            if (_isAppendingPhotoBatch || _displayedPhotoCount >= _allPhotos.Count)
+            {
+                return;
+            }
+
+            _isAppendingPhotoBatch = true;
+            var endIndex = Math.Min(_displayedPhotoCount + batchSize, _allPhotos.Count);
+            for (var index = _displayedPhotoCount; index < endIndex; index++)
+            {
+                Photos.Add(_allPhotos[index]);
+            }
+            _displayedPhotoCount = endIndex;
+            _isAppendingPhotoBatch = false;
+        }
+
+        private IEnumerable<DriveItem> SortPhotos(IEnumerable<DriveItem> items)
+        {
+            if (_photoSort == "DateTakenOldest")
+            {
+                return items.OrderBy(GetPhotoDate);
+            }
+            if (_photoSort == "ModifiedNewest")
+            {
+                return items.OrderByDescending(GetLastModifiedDate);
+            }
+            if (_photoSort == "NameAscending")
+            {
+                return items.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase);
+            }
+            if (_photoSort == "NameDescending")
+            {
+                return items.OrderByDescending(item => item.Name, StringComparer.OrdinalIgnoreCase);
+            }
+            return items.OrderByDescending(GetPhotoDate);
+        }
+
+        private IEnumerable<DriveItem> FilterPhotos(IEnumerable<DriveItem> items)
+        {
+            if (_album != null)
+            {
+                return items.Where(item => _album.ItemIds.Contains(item.Id));
+            }
+
+            if (_collection != null && _collection.IsOnThisDay)
+            {
+                var today = DateTimeOffset.Now;
+                return items.Where(item => IsImageFile(item) && IsOnThisDay(item, today));
+            }
+
+            if (_collection != null)
+            {
+                return items.Where(item => IsImageFile(item) && GetMonthKey(item) == _collection.MonthKey);
+            }
+
+            return _showVideos
+                ? items.Where(IsVideoFile)
+                : items.Where(IsImageFile);
+        }
+
+        private IEnumerable<DriveItem> FilterBySelectedMonth(IEnumerable<DriveItem> items)
+        {
+            return string.IsNullOrEmpty(_selectedMonthKey)
+                ? items
+                : items.Where(item => GetMonthKey(item) == _selectedMonthKey);
+        }
+
+        private List<PhotoCollection> GetAvailableMonths()
+        {
+            return _mediaItems
+                .Where(item => !string.IsNullOrEmpty(GetMonthKey(item)))
+                .GroupBy(GetMonthKey)
+                .OrderByDescending(group => group.Key)
+                .Select(group => new PhotoCollection
+                {
+                    Title = GetMonthTitle(group.Key),
+                    MonthKey = group.Key,
+                    Count = group.Count(),
+                    ItemType = _showVideos ? "video" : "photo"
+                })
+                .ToList();
+        }
+
+        private void UpdateDateNavigationButton()
+        {
+            if (_album != null || _collection != null)
+            {
+                return;
+            }
+
+            var selectedMonth = GetAvailableMonths()
+                .FirstOrDefault(month => month.MonthKey == _selectedMonthKey);
+            DateNavigationButton.IsEnabled = _mediaItems.Count > 0;
+            DateNavigationButton.Label = selectedMonth == null ? "Jump to date" : selectedMonth.Title;
+        }
+
+        private void SetEmptyMessage()
+        {
+            if (_album != null)
+            {
+                EmptyTitle.Text = "This album is empty.";
+                EmptyDescription.Text = "Add photos from Photos to see them here.";
+                return;
+            }
+
+            var selectedMonth = GetAvailableMonths()
+                .FirstOrDefault(month => month.MonthKey == _selectedMonthKey);
+            if (selectedMonth != null)
+            {
+                EmptyTitle.Text = "No " + GetMediaTypeLabel() + " in " + selectedMonth.Title + ".";
+                EmptyDescription.Text = "Choose All dates to return to your full library.";
+                return;
+            }
+
+            EmptyTitle.Text = _showVideos ? "No videos found." : "No photos found.";
+            EmptyDescription.Text = (_showVideos ? "Videos" : "Photos") +
+                " in your selected OneDrive folders will appear here.";
+        }
+
+        private static string GetMonthKey(DriveItem item)
+        {
+            DateTimeOffset date;
+            if (!DateTimeOffset.TryParse(item.DateTaken, out date) &&
+                !DateTimeOffset.TryParse(item.LastModified, out date))
+            {
+                return string.Empty;
+            }
+            return date.ToString("yyyy-MM");
+        }
+
+        private static string GetMonthTitle(string monthKey)
+        {
+            DateTimeOffset month;
+            return DateTimeOffset.TryParse(monthKey + "-01", out month)
+                ? month.ToString("MMMM yyyy")
+                : monthKey;
+        }
+
+        private static DateTimeOffset GetPhotoDate(DriveItem item)
+        {
+            DateTimeOffset date;
+            if (DateTimeOffset.TryParse(item.DateTaken, out date) ||
+                DateTimeOffset.TryParse(item.LastModified, out date))
+            {
+                return date;
+            }
+            return DateTimeOffset.MinValue;
+        }
+
+        private static bool IsOnThisDay(DriveItem item, DateTimeOffset today)
+        {
+            var date = GetPhotoDate(item);
+            return date != DateTimeOffset.MinValue && date.Year < today.Year &&
+                   date.Month == today.Month && date.Day == today.Day;
+        }
+
+        private static DateTimeOffset GetLastModifiedDate(DriveItem item)
+        {
+            DateTimeOffset date;
+            return DateTimeOffset.TryParse(item.LastModified, out date) ? date : DateTimeOffset.MinValue;
+        }
+
+        private static string GetPhotoSortLabel(string sort)
+        {
+            if (sort == "DateTakenOldest")
+            {
+                return "Date: oldest";
+            }
+            if (sort == "ModifiedNewest")
+            {
+                return "Modified";
+            }
+            if (sort == "NameAscending")
+            {
+                return "Name: A-Z";
+            }
+            if (sort == "NameDescending")
+            {
+                return "Name: Z-A";
+            }
+            return "Date: newest";
+        }
+
+        private static bool IsMediaFile(DriveItem item)
+        {
+            return IsImageFile(item) || IsVideoFile(item);
+        }
+
+        private static bool IsImageFile(DriveItem item)
+        {
+            return item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsVideoFile(DriveItem item)
+        {
+            if (item.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return !item.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
+                VideoExtensions.Contains(Path.GetExtension(item.Name));
+        }
+
+        private static string GetDiagnosticItemId(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId))
+            {
+                return "no ID";
+            }
+
+            return itemId.Length <= 8 ? itemId : itemId.Substring(itemId.Length - 8);
+        }
+
+        private static string GetDiagnosticMimeType(string mimeType)
+        {
+            return string.IsNullOrEmpty(mimeType) ? "none" : mimeType;
+        }
+
+        private async void PhotosGrid_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            await ViewPhotoAsync((DriveItem)e.ClickedItem);
+        }
+
+        private static async Task<StorageFile> CreateTemporaryPhotoFileAsync(string originalName)
+        {
+            return await ApplicationData.Current.TemporaryFolder.CreateFileAsync(
+                Guid.NewGuid().ToString("N") + GetPhotoExtension(originalName),
+                CreationCollisionOption.FailIfExists);
+        }
+
+        private static string GetPhotoExtension(string name)
+        {
+            var index = name == null ? -1 : name.LastIndexOf('.');
+            var extension = index >= 0 ? name.Substring(index) : ".dat";
+            if (extension.Length > 12)
+            {
+                return ".dat";
+            }
+
+            for (var character = 1; character < extension.Length; character++)
+            {
+                if (!char.IsLetterOrDigit(extension[character]))
+                {
+                    return ".dat";
+                }
+            }
+            return extension.Length > 1 ? extension : ".dat";
+        }
+    }
+}
