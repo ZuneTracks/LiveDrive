@@ -456,10 +456,7 @@ namespace LiveDrive.Pages
                                     "Delta deletion",
                                     source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
                                     "] was " + (removed ? "removed from" : "not found in") + " the index.");
-                                if (removed)
-                                {
-                                    await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
-                                }
+                                await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
                             }
                             else if (IsMediaFile(item))
                             {
@@ -474,14 +471,7 @@ namespace LiveDrive.Pages
                                 DriveItem existingItem;
                                 if (indexedPhotos.TryGetValue(item.Id, out existingItem))
                                 {
-                                    if (HasThumbnailChanged(existingItem, item))
-                                    {
-                                        await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
-                                    }
-                                    else
-                                    {
-                                        item.ThumbnailUrl = existingItem.ThumbnailUrl;
-                                    }
+                                    item.ThumbnailUrl = existingItem.ThumbnailUrl;
                                 }
                                 indexedPhotos[item.Id] = item;
                                 _unavailableThumbnailKeys.Remove(item.Id + "|medium");
@@ -498,7 +488,6 @@ namespace LiveDrive.Pages
                                 }
                                 if (indexedPhotos.Remove(item.Id))
                                 {
-                                    await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
                                 }
                             }
                         }
@@ -555,12 +544,6 @@ namespace LiveDrive.Pages
                 SyncStatusPanel.Visibility = Visibility.Collapsed;
                 _isLoading = false;
             }
-        }
-
-        private static bool HasThumbnailChanged(DriveItem existingItem, DriveItem incomingItem)
-        {
-            return !string.Equals(
-                existingItem.LastModified, incomingItem.LastModified, StringComparison.Ordinal);
         }
 
         private void SetSyncStatus(string text)

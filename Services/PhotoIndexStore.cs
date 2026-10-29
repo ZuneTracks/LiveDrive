@@ -19,7 +19,7 @@ namespace LiveDrive.Services
         private const string IndexFileName = "index.json";
         private const string PreviewFileName = "preview.json";
         private const int PreviewItemCount = 150;
-        private const ulong ThumbnailCacheLimit = 128 * 1024 * 1024;
+        private const ulong ThumbnailCacheLimit = 256 * 1024 * 1024;
         private PhotoIndexSnapshot _inMemorySnapshot;
         private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim _thumbnailFileLock = new SemaphoreSlim(1, 1);
