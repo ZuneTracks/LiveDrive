@@ -377,7 +377,7 @@ namespace LiveDrive.Pages
                     if (filteredPreview.Count > 0)
                     {
                         await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                            filteredPreview, _thumbnailSize == "Large", CancellationToken.None);
+                            filteredPreview, CancellationToken.None);
                         RenderPhotos(filteredPreview);
                         LoadingPanel.Visibility = Visibility.Collapsed;
                         SetSyncStatus(GetCachedMediaStatus("Loading your library…"));
@@ -387,7 +387,7 @@ namespace LiveDrive.Pages
 
                 var snapshot = await Task.Run(async () => await _services.PhotoIndex.LoadAsync());
                 await _services.PhotoIndex.RestoreCachedThumbnailUrisAsync(
-                    snapshot.Items, _thumbnailSize == "Large", CancellationToken.None);
+                    snapshot.Items, CancellationToken.None);
                 _hasFullPhotoIndex = true;
                 if (snapshot.SourceFolders.Count == 0)
                 {
@@ -456,10 +456,7 @@ namespace LiveDrive.Pages
                                     "Delta deletion",
                                     source.Name + ": " + item.Name + " [" + GetDiagnosticItemId(item.Id) +
                                     "] was " + (removed ? "removed from" : "not found in") + " the index.");
-                                if (removed)
-                                {
-                                    await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
-                                }
+                                await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
                             }
                             else if (IsMediaFile(item))
                             {
@@ -474,14 +471,7 @@ namespace LiveDrive.Pages
                                 DriveItem existingItem;
                                 if (indexedPhotos.TryGetValue(item.Id, out existingItem))
                                 {
-                                    if (HasThumbnailChanged(existingItem, item))
-                                    {
-                                        await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
-                                    }
-                                    else
-                                    {
-                                        item.ThumbnailUrl = existingItem.ThumbnailUrl;
-                                    }
+                                    item.ThumbnailUrl = existingItem.ThumbnailUrl;
                                 }
                                 indexedPhotos[item.Id] = item;
                                 _unavailableThumbnailKeys.Remove(item.Id + "|medium");
@@ -498,7 +488,6 @@ namespace LiveDrive.Pages
                                 }
                                 if (indexedPhotos.Remove(item.Id))
                                 {
-                                    await _services.PhotoIndex.RemoveThumbnailAsync(item.Id);
                                 }
                             }
                         }
@@ -555,12 +544,6 @@ namespace LiveDrive.Pages
                 SyncStatusPanel.Visibility = Visibility.Collapsed;
                 _isLoading = false;
             }
-        }
-
-        private static bool HasThumbnailChanged(DriveItem existingItem, DriveItem incomingItem)
-        {
-            return !string.Equals(
-                existingItem.LastModified, incomingItem.LastModified, StringComparison.Ordinal);
         }
 
         private void SetSyncStatus(string text)

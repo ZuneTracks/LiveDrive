@@ -19,7 +19,7 @@ namespace LiveDrive.Services
         private const string IndexFileName = "index.json";
         private const string PreviewFileName = "preview.json";
         private const int PreviewItemCount = 150;
-        private const ulong ThumbnailCacheLimit = 128 * 1024 * 1024;
+        private const ulong ThumbnailCacheLimit = 256 * 1024 * 1024;
         private PhotoIndexSnapshot _inMemorySnapshot;
         private readonly SemaphoreSlim _saveLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim _thumbnailFileLock = new SemaphoreSlim(1, 1);
@@ -234,19 +234,44 @@ namespace LiveDrive.Services
         }
 
         public async Task RestoreCachedThumbnailUrisAsync(
-            IEnumerable<DriveItem> items, bool preferLarge, CancellationToken cancellationToken)
+            IEnumerable<DriveItem> items, CancellationToken cancellationToken)
         {
             await _thumbnailFileLock.WaitAsync(cancellationToken);
             try
             {
+                var cachedFileNames = new HashSet<string>(
+                    (await (await GetThumbnailsFolderAsync()).GetFilesAsync()).Select(file => file.Name),
+                    StringComparer.OrdinalIgnoreCase);
                 foreach (var item in items)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var uri = await GetBestCachedThumbnailUriAsync(item.Id);
-                    if (!string.IsNullOrEmpty(uri))
+                    var largeFileName = GetThumbnailFileName(item.Id, true);
+                    if (cachedFileNames.Contains(largeFileName))
                     {
-                        item.ThumbnailUrl = uri;
+                        item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, true);
                     }
+                    else if (cachedFileNames.Contains(GetThumbnailFileName(item.Id, false)))
+                    {
+                        item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, false);
+                    }
+                }
+            }
+            finally
+            {
+                _thumbnailFileLock.Release();
+            }
+        }
+
+        public async Task RestoreCachedThumbnailUriAsync(
+            DriveItem item, CancellationToken cancellationToken)
+        {
+            await _thumbnailFileLock.WaitAsync(cancellationToken);
+            try
+            {
+                var uri = await GetBestCachedThumbnailUriAsync(item.Id);
+                if (!string.IsNullOrEmpty(uri))
+                {
+                    item.ThumbnailUrl = uri;
                 }
             }
             finally

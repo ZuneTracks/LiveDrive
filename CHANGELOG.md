@@ -6,9 +6,12 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
-- Photos, Videos, and album covers now verify cached thumbnail files before displaying
-  them, preserve high-quality thumbnails over lower-quality versions, and coalesce
+- Photos, Videos, and album covers now restore cached thumbnails in a single directory
+  scan, preserve high-quality thumbnails over lower-quality versions, and coalesce
   simultaneous thumbnail requests for the same item.
+- Cached photo and video thumbnails now survive refreshes and remain on the device until
+  their corresponding OneDrive item is deleted, the local library cache is cleared, or
+  the 256 MB thumbnail-cache limit requires eviction.
 - Camera Backup diagnostics now include a copyable status snapshot for registration,
   enrollment, activation, lock, queue, resumable-upload, outcome, and timing state.
 - Scheduled Camera Backup now records a per-device enrollment cutoff and ignores
