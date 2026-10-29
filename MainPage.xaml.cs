@@ -87,7 +87,7 @@ namespace LiveDrive
             }
             else if (destination == "Videos")
             {
-                ContentFrame.Navigate(typeof(PhotosPage), "Videos");
+                ContentFrame.Navigate(typeof(VideosPage));
             }
             else if (destination == "Albums")
             {

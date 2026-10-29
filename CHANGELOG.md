@@ -6,6 +6,8 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Photos and Videos now retain independent cached grid pages when switching sections,
+  returning to each already-rendered library without rebuilding the other view.
 - Photos, Videos, and album covers now restore cached thumbnails in a single directory
   scan, preserve high-quality thumbnails over lower-quality versions, and coalesce
   simultaneous thumbnail requests for the same item.

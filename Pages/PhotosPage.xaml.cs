@@ -21,7 +21,7 @@ using Windows.UI.Xaml.Navigation;
 
 namespace LiveDrive.Pages
 {
-    public sealed partial class PhotosPage : Page
+    public partial class PhotosPage : Page
     {
         private readonly AppServices _services;
         private const string ThumbnailSizeSettingName = "PhotoThumbnailSize";
@@ -50,6 +50,7 @@ namespace LiveDrive.Pages
         private FrameworkElement _lastHeldPhotoTile;
         private DateTimeOffset _lastPhotoHoldStarted;
         private readonly DataTransferManager _shareManager;
+        private bool _isShareManagerSubscribed;
         private StorageFile _shareFile;
         private string _shareTitle;
         private readonly HashSet<string> _queuedThumbnailKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -61,9 +62,9 @@ namespace LiveDrive.Pages
             InitializeComponent();
             _services = ((App)Application.Current).Services;
             _shareManager = DataTransferManager.GetForCurrentView();
-            _shareManager.DataRequested += ShareManager_DataRequested;
             ApplyThumbnailSize(ApplicationData.Current.LocalSettings.Values[ThumbnailSizeSettingName] as string);
             ApplyPhotoSort(ApplicationData.Current.LocalSettings.Values[PhotoSortSettingName] as string);
+            NavigationCacheMode = NavigationCacheMode.Required;
             PhotosGrid.Loaded += (sender, args) =>
             {
                 ApplyThumbnailSize(_thumbnailSize);
@@ -325,9 +326,10 @@ namespace LiveDrive.Pages
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            SubscribeShareManager();
             _album = e.Parameter as PhotoAlbum;
             _collection = e.Parameter as PhotoCollection;
-            _showVideos = string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
+            _showVideos = IsVideoLibraryPage || string.Equals(e.Parameter as string, "Videos", StringComparison.Ordinal);
             PageTitle.Text = _album != null ? _album.Name : _collection != null ? _collection.Title :
                 _showVideos ? "Videos" : "Photos";
             LoadingText.Text = _showVideos ? "Loading your videos…" : "Loading your photos…";
@@ -352,8 +354,23 @@ namespace LiveDrive.Pages
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
-            _shareManager.DataRequested -= ShareManager_DataRequested;
+            if (_isShareManagerSubscribed)
+            {
+                _shareManager.DataRequested -= ShareManager_DataRequested;
+                _isShareManagerSubscribed = false;
+            }
             base.OnNavigatedFrom(e);
+        }
+
+        protected virtual bool IsVideoLibraryPage => false;
+
+        private void SubscribeShareManager()
+        {
+            if (!_isShareManagerSubscribed)
+            {
+                _shareManager.DataRequested += ShareManager_DataRequested;
+                _isShareManagerSubscribed = true;
+            }
         }
 
         private async Task LoadPhotosAsync()
