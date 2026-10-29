@@ -419,6 +419,10 @@ namespace LiveDrive.Pages
                         snapshot.Items, CancellationToken.None);
                 }
                 _hasFullPhotoIndex = true;
+                if (!isInitialLoad)
+                {
+                    RestartThumbnailWarmup();
+                }
                 if (snapshot.SourceFolders.Count == 0)
                 {
                     var sources = await PromptForSourceFoldersAsync();
@@ -1279,14 +1283,19 @@ namespace LiveDrive.Pages
 
         private void RenderFilteredPhotos()
         {
-            _thumbnailWarmupVersion++;
             Photos.Clear();
             _allPhotos = SortPhotos(FilterBySelectedMonth(_mediaItems)).ToList();
             _displayedPhotoCount = 0;
             AppendPhotoBatch(InitialPhotoBatchSize);
-            StartThumbnailWarmup(_thumbnailWarmupVersion);
+            RestartThumbnailWarmup();
             UpdateDateNavigationButton();
             SetEmptyMessage();
+        }
+
+        private void RestartThumbnailWarmup()
+        {
+            _thumbnailWarmupVersion++;
+            StartThumbnailWarmup(_thumbnailWarmupVersion);
         }
 
         private async void StartThumbnailWarmup(int warmupVersion)
