@@ -26,13 +26,15 @@ namespace LiveDrive.Services
             ".jpg", ".jpeg", ".png", ".mp4", ".mov"
         };
         private const int MaximumUploadsPerRun = 10;
-        private const int MaximumUploadsPerBackgroundRun = 1;
+        private const int MaximumUploadsPerBackgroundRun = 10;
         private const uint RecentFilesPerBackgroundRun = 12;
         private const int MaximumPendingPaths = 100;
-        private const int MaximumLargeUploadChunksPerBackgroundRun = 8;
+        private const int MaximumLargeUploadChunksPerBackgroundRun = 16;
         private const int InitialUnavailableRetryMinutes = 15;
         private const int MaximumUnavailableRetryMinutes = 360;
         private static readonly TimeSpan MaximumBackgroundWorkDuration = TimeSpan.FromSeconds(18);
+        private static readonly TimeSpan MinimumTimeToStartAnotherItem = TimeSpan.FromSeconds(4);
+        private static readonly TimeSpan DefaultLargeUploadChunkDuration = TimeSpan.FromSeconds(3);
 
         private readonly IGraphClient _graph;
         private readonly CameraUploadHistoryStore _history;
@@ -190,36 +192,55 @@ namespace LiveDrive.Services
                 await _state.ClearUploadSessionAsync();
                 uploadSession = null;
             }
+            var deferredCount = 0;
+            string continuationNote = null;
+            TimeSpan? lastChunkDuration = _state.GetLastLargeUploadChunkDuration();
             while (pendingPaths.Count > 0 &&
                 uploadedCount + skippedCount < MaximumUploadsPerBackgroundRun)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var hasCompletedWork = uploadedCount + skippedCount > 0;
+                if (hasCompletedWork &&
+                    GetRemainingBackgroundTime(activationStarted) < MinimumTimeToStartAnotherItem)
+                {
+                    break;
+                }
+
                 var now = DateTimeOffset.UtcNow;
                 var path = uploadSession == null
                     ? pendingPaths.FirstOrDefault(candidate => IsReadyToRetry(retryStates, candidate, now))
                     : uploadSession.FilePath;
                 if (string.IsNullOrEmpty(path) || !IsReadyToRetry(retryStates, path, now))
                 {
-                    SaveWaitingForRetryResult(pendingPaths, retryStates, now);
-                    return 0;
+                    if (!hasCompletedWork && deferredCount == 0)
+                    {
+                        SaveWaitingForRetryResult(pendingPaths, retryStates, now);
+                        return 0;
+                    }
+                    break;
                 }
 
                 StorageFile file;
+                string unavailableReason = null;
                 try
                 {
                     file = await StorageFile.GetFileFromPathAsync(path);
                 }
                 catch (FileNotFoundException)
                 {
-                    await DeferUnavailablePathAsync(
-                        path, retryStates, "The file was not available.", pendingPaths.Count);
-                    return 0;
+                    file = null;
+                    unavailableReason = "The file was not available.";
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    await DeferUnavailablePathAsync(
-                        path, retryStates, "Access to the file was unavailable.", pendingPaths.Count);
-                    return 0;
+                    file = null;
+                    unavailableReason = "Access to the file was unavailable.";
+                }
+                if (file == null)
+                {
+                    await DeferUnavailablePathAsync(path, retryStates, unavailableReason, pendingPaths.Count);
+                    deferredCount++;
+                    continue;
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -231,14 +252,12 @@ namespace LiveDrive.Services
                     _state.SaveDestinationFolderId(destinationFolderId);
                 }
 
-                if (await _graph.ItemExistsAsync(destinationFolderId, file.Name, cancellationToken))
+                // A resumed session was already checked for a remote duplicate when it started.
+                var isResumingSession = uploadSession != null && string.Equals(
+                    uploadSession.FilePath, file.Path, StringComparison.OrdinalIgnoreCase);
+                if (!isResumingSession &&
+                    await _graph.ItemExistsAsync(destinationFolderId, file.Name, cancellationToken))
                 {
-                    if (uploadSession != null && string.Equals(
-                        uploadSession.FilePath, file.Path, StringComparison.OrdinalIgnoreCase))
-                    {
-                        await _state.ClearUploadSessionAsync();
-                        uploadSession = null;
-                    }
                     await _state.MarkUploadedAsync(file.Path);
                     await _state.AppendDiagnosticAsync(
                         "Camera Roll item reconciled", file.Name + " already exists in OneDrive.");
@@ -255,8 +274,7 @@ namespace LiveDrive.Services
                     var properties = await file.GetBasicPropertiesAsync();
                     if (properties.Size > 4 * 1024 * 1024)
                     {
-                        if (uploadSession != null &&
-                            !string.Equals(uploadSession.FilePath, file.Path, StringComparison.OrdinalIgnoreCase))
+                        if (uploadSession != null && !isResumingSession)
                         {
                             await _state.ClearUploadSessionAsync();
                             uploadSession = null;
@@ -264,30 +282,32 @@ namespace LiveDrive.Services
 
                         var refreshSessionOffset = uploadSession != null;
                         var chunksUploaded = 0;
+                        var stopRun = false;
                         while (true)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
+                            // Always make some progress on an otherwise idle run, even on a slow network.
+                            var mustAttemptChunk = chunksUploaded == 0 && !hasCompletedWork;
+                            var remaining = GetRemainingBackgroundTime(activationStarted);
                             if (chunksUploaded >= MaximumLargeUploadChunksPerBackgroundRun ||
-                                DateTimeOffset.UtcNow - activationStarted >= MaximumBackgroundWorkDuration)
+                                remaining <= TimeSpan.Zero ||
+                                (!mustAttemptChunk &&
+                                 remaining < (lastChunkDuration ?? DefaultLargeUploadChunkDuration)))
                             {
                                 if (uploadSession != null)
                                 {
-                                    await SaveLargeUploadProgressAsync(
+                                    continuationNote = await SaveLargeUploadProgressAsync(
                                         file.Name, uploadSession, properties.Size, chunksUploaded);
                                 }
-                                else
-                                {
-                                    _state.SaveLastResult(
-                                        "Scheduled Camera Roll backup used its available time before starting " +
-                                        file.Name + ". It will retry at the next scheduled check.");
-                                }
-                                return 0;
+                                stopRun = true;
+                                break;
                             }
 
                             var chunkTimer = Stopwatch.StartNew();
                             var result = await _graph.UploadLargeFileChunkAsync(
                                 destinationFolderId, file, uploadSession, false, true, cancellationToken,
                                 refreshSessionOffset);
+                            lastChunkDuration = chunkTimer.Elapsed;
                             _state.SaveLastLargeUploadChunkDuration(chunkTimer.Elapsed);
                             chunksUploaded++;
                             refreshSessionOffset = false;
@@ -300,6 +320,11 @@ namespace LiveDrive.Services
 
                             uploadSession = result.Session;
                             await _state.SaveUploadSessionAsync(uploadSession);
+                        }
+
+                        if (stopRun)
+                        {
+                            break;
                         }
                     }
                     else
@@ -332,26 +357,37 @@ namespace LiveDrive.Services
 
             await _state.SavePendingPathsAsync(pendingPaths);
             await _state.SavePendingRetryStatesAsync(retryStates.Values);
+            await _state.AppendDiagnosticAsync(
+                "Scheduled upload pass finished",
+                uploadedCount + " uploaded, " + skippedCount + " reconciled, " + deferredCount + " deferred in " +
+                (int)(DateTimeOffset.UtcNow - activationStarted).TotalMilliseconds + " ms.");
             _state.SaveLastResult(
                 "Uploaded " + uploadedCount + " Camera Roll " +
                 (uploadedCount == 1 ? "item." : "items.") +
                 (skippedCount == 0 ? string.Empty : " Skipped " + skippedCount + " existing " +
                     (skippedCount == 1 ? "item." : "items.")) +
+                (deferredCount == 0 ? string.Empty : " Deferred " + deferredCount + " temporarily unavailable " +
+                    (deferredCount == 1 ? "item." : "items.")) +
+                (continuationNote == null ? string.Empty : " " + continuationNote) +
                 " " +
                 pendingPaths.Count + " queued item" + (pendingPaths.Count == 1 ? " remains." : "s remain."));
             return uploadedCount;
         }
 
-        private async Task SaveLargeUploadProgressAsync(
+        private static TimeSpan GetRemainingBackgroundTime(DateTimeOffset activationStarted)
+        {
+            return MaximumBackgroundWorkDuration - (DateTimeOffset.UtcNow - activationStarted);
+        }
+
+        private async Task<string> SaveLargeUploadProgressAsync(
             string fileName, CameraUploadSessionState session, ulong fileSize, int chunksUploaded)
         {
             await _state.SaveUploadSessionAsync(session);
             await _state.AppendDiagnosticAsync(
                 "Large upload advanced", fileName + " at " + session.NextOffset +
                 " of " + fileSize + " bytes after " + chunksUploaded + " chunk(s).");
-            _state.SaveLastResult(
-                FormatUploadProgress(fileName, (double)session.NextOffset / fileSize) +
-                " It will continue at the next scheduled check.");
+            return FormatUploadProgress(fileName, (double)session.NextOffset / fileSize) +
+                " It will continue at the next scheduled check.";
         }
 
         private async Task DeferUnavailablePathAsync(
