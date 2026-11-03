@@ -37,6 +37,10 @@
             </Border>
             <ToggleSwitch x:Name="ScheduledBackupToggle" Header="Check Camera Roll every 15 minutes"
                           Toggled="ScheduledBackupToggle_Toggled" Margin="0,0,0,4"/>
+            <ToggleSwitch x:Name="CellularBackupToggle" Header="Allow backup over cellular data"
+                          Toggled="CellularBackupToggle_Toggled" Margin="0,0,0,4"/>
+            <TextBlock Text="When off, background uploads wait for Wi-Fi or another unmetered connection."
+                       TextWrapping="Wrap" Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,6"/>
             <TextBlock x:Name="ScheduledBackupStatus" TextWrapping="Wrap"
                        Style="{StaticResource LiveDriveMutedTextStyle}" Margin="0,0,0,6"/>
             <TextBlock x:Name="LastCameraRollScanStatus" TextWrapping="Wrap"

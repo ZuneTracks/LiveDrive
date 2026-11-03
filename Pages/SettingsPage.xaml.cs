@@ -45,6 +45,7 @@ namespace LiveDrive.Pages
                 await _services.Auth.SignInAsync();
                 await _services.PhotoIndex.ClearAsync();
                 _services.CameraUploadHistory.Clear();
+                await _services.CameraBackup.CancelBackgroundTransfersAsync();
                 await _services.CameraBackupState.ClearAsync();
                 AccountStatus.Text = "Signed in. Open Drive to browse your files.";
                 await UpdateStorageStatusAsync(true);
@@ -60,6 +61,7 @@ namespace LiveDrive.Pages
             await _services.Auth.SignOutAsync();
             await _services.PhotoIndex.ClearAsync();
             _services.CameraUploadHistory.Clear();
+            await _services.CameraBackup.CancelBackgroundTransfersAsync();
             await _services.CameraBackupState.ClearAsync();
             _services.CameraBackupScheduler.Disable();
             _services.LiveTile.Clear();

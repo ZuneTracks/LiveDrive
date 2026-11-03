@@ -136,6 +136,7 @@
     <Compile Include="Models\AuthToken.cs" />
     <Compile Include="Models\BackupItem.cs" />
     <Compile Include="Models\CameraBackupRetryState.cs" />
+    <Compile Include="Models\CameraTransferRecord.cs" />
     <Compile Include="Models\CameraUploadSessionState.cs" />
     <Compile Include="Models\DriveItem.cs" />
     <Compile Include="Models\DriveItemPage.cs" />
@@ -181,6 +182,7 @@
     <Compile Include="Services\CameraBackupScheduler.cs" />
     <Compile Include="Services\CameraBackupService.cs" />
     <Compile Include="Services\CameraBackupStateStore.cs" />
+    <Compile Include="Services\CameraTransferService.cs" />
     <Compile Include="Services\ClientConfiguration.cs" />
     <Compile Include="Services\CameraUploadHistoryStore.cs" />
     <Compile Include="Services\DriveClipboard.cs" />

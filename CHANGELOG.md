@@ -6,6 +6,12 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Scheduled Camera Roll backup now hands photos and videos under 60 MB to Windows
+  Background Transfer, OneDrive-style, with up to five uploads continuing after
+  LiveDrive's background check ends. Larger videos keep using LiveDrive's resumable
+  chunked uploader. The scheduled backup queue shows background upload progress, and a
+  new "Allow backup over cellular data" setting (off by default) lets backups continue
+  on metered connections instead of waiting for Wi-Fi.
 - Scheduled Camera Roll backup now uploads several items per background check within its
   time budget instead of stopping after one, sends large photos and videos in 1.25 MB
   chunks instead of 320 KB, stops before starting a chunk that would not finish in time,

@@ -38,6 +38,8 @@ namespace LiveDrive.Services
             string parentId, StorageFile file, CameraUploadSessionState session,
             bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken,
             bool refreshSessionOffset = true);
+        Task<CameraUploadSessionState> CreateFileUploadSessionAsync(
+            string parentId, StorageFile file, bool failOnConflict, CancellationToken cancellationToken);
         Task CopyAsync(DriveItem item, string destinationFolderId);
         Task MoveAsync(DriveItem item, string destinationFolderId);
         Task DeleteAsync(DriveItem item);

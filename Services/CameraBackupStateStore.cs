@@ -43,6 +43,8 @@ namespace LiveDrive.Services
         private const string LastLargeUploadChunkMillisecondsSettingName =
             "CameraBackupLastLargeUploadChunkMilliseconds";
         private const string ToastDiagnosticSettingName = "CameraBackupToastDiagnostic";
+        private const string AllowCellularSettingName = "CameraBackupAllowCellular";
+        private const string TransferRecordsFileName = "camera-backup-transfers.json";
         private const int FileAlreadyExistsHResult = unchecked((int)0x800700B7);
         private const int MaximumUploadedPaths = 1000;
         private const int MaximumPendingPaths = 100;
@@ -68,6 +70,80 @@ namespace LiveDrive.Services
             {
                 ApplicationData.Current.LocalSettings.Values.Remove(ScheduledBackupEnabledSettingName);
             }
+        }
+
+        public bool IsCellularBackupAllowed
+        {
+            get
+            {
+                object value;
+                return ApplicationData.Current.LocalSettings.Values.TryGetValue(
+                    AllowCellularSettingName, out value) && value is bool && (bool)value;
+            }
+        }
+
+        public void SetCellularBackupAllowed(bool allowed)
+        {
+            if (allowed)
+            {
+                ApplicationData.Current.LocalSettings.Values[AllowCellularSettingName] = true;
+            }
+            else
+            {
+                ApplicationData.Current.LocalSettings.Values.Remove(AllowCellularSettingName);
+            }
+        }
+
+        public async Task<IReadOnlyList<CameraTransferRecord>> LoadTransferRecordsAsync()
+        {
+            try
+            {
+                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(TransferRecordsFileName);
+                var records = new List<CameraTransferRecord>();
+                foreach (var value in JsonArray.Parse(await FileIO.ReadTextAsync(file)))
+                {
+                    var json = value.GetObject();
+                    Guid transferId;
+                    DateTimeOffset startedUtc;
+                    var filePath = json.GetNamedString("filePath", string.Empty);
+                    if (string.IsNullOrEmpty(filePath) ||
+                        !Guid.TryParse(json.GetNamedString("transferId", string.Empty), out transferId) ||
+                        !DateTimeOffset.TryParse(json.GetNamedString("startedUtc", string.Empty), out startedUtc))
+                    {
+                        continue;
+                    }
+
+                    records.Add(new CameraTransferRecord
+                    {
+                        TransferId = transferId,
+                        FilePath = filePath,
+                        FileSize = (ulong)json.GetNamedNumber("fileSize", 0),
+                        StartedUtc = startedUtc
+                    });
+                }
+                return records;
+            }
+            catch (FileNotFoundException)
+            {
+                return new List<CameraTransferRecord>();
+            }
+        }
+
+        public async Task SaveTransferRecordsAsync(IEnumerable<CameraTransferRecord> records)
+        {
+            var values = new JsonArray();
+            foreach (var record in records.Where(record => record != null && !string.IsNullOrEmpty(record.FilePath)))
+            {
+                var json = new JsonObject();
+                json.SetNamedValue("transferId", JsonValue.CreateStringValue(record.TransferId.ToString()));
+                json.SetNamedValue("filePath", JsonValue.CreateStringValue(record.FilePath));
+                json.SetNamedValue("fileSize", JsonValue.CreateNumberValue(record.FileSize));
+                json.SetNamedValue("startedUtc", JsonValue.CreateStringValue(record.StartedUtc.ToString("o")));
+                values.Add(json);
+            }
+            var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                TransferRecordsFileName, CreationCollisionOption.ReplaceExisting);
+            await FileIO.WriteTextAsync(file, values.Stringify());
         }
 
         public bool EnsureScheduledBackupEnrollment(DateTimeOffset timestamp)
@@ -496,7 +572,15 @@ namespace LiveDrive.Services
             ApplicationData.Current.LocalSettings.Values.Remove(LastBackgroundDurationMillisecondsSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(LastLargeUploadChunkMillisecondsSettingName);
             ApplicationData.Current.LocalSettings.Values.Remove(PendingScanOffsetSettingName);
+            ApplicationData.Current.LocalSettings.Values.Remove(AllowCellularSettingName);
             await ClearDiagnosticsAsync();
+            try
+            {
+                await (await ApplicationData.Current.LocalFolder.GetFileAsync(TransferRecordsFileName)).DeleteAsync();
+            }
+            catch (FileNotFoundException)
+            {
+            }
             try
             {
                 await (await ApplicationData.Current.LocalFolder.GetFileAsync(UploadedPathsFileName)).DeleteAsync();

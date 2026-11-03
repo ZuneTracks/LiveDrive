@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using LiveDrive.Services;
 using Windows.ApplicationModel.Background;
 using Windows.Data.Xml.Dom;
+using Windows.Networking.BackgroundTransfer;
 using Windows.UI.Notifications;
 
 namespace LiveDrive.BackgroundTasks
@@ -21,13 +23,20 @@ namespace LiveDrive.BackgroundTasks
                 cancellationReason = reason;
                 cancellation.Cancel();
             };
-            _ = RunAsync(cancellation, deferral, () => cancellationReason);
+            var transferDetails = taskInstance.TriggerDetails as BackgroundTransferCompletionGroupTriggerDetails;
+            if (transferDetails != null)
+            {
+                // Completion-group registrations are single-use; the next batch registers a new one.
+                taskInstance.Task.Unregister(false);
+            }
+            _ = RunAsync(cancellation, deferral, () => cancellationReason, transferDetails?.Uploads);
         }
 
         private static async Task RunAsync(
             CancellationTokenSource cancellation,
             BackgroundTaskDeferral deferral,
-            Func<BackgroundTaskCancellationReason?> getCancellationReason)
+            Func<BackgroundTaskCancellationReason?> getCancellationReason,
+            IReadOnlyList<UploadOperation> finishedTransfers)
         {
             var state = new CameraBackupStateStore();
             var backgroundLockAcquired = false;
@@ -35,7 +44,8 @@ namespace LiveDrive.BackgroundTasks
             try
             {
                 state.SaveLastBackgroundActivation(DateTimeOffset.Now);
-                await state.AppendDiagnosticAsync("Background task activated");
+                await state.AppendDiagnosticAsync("Background task activated",
+                    finishedTransfers == null ? "Scheduled check." : finishedTransfers.Count + " background upload(s) finished.");
                 if (!state.IsScheduledBackupEnabled)
                 {
                     state.SaveLastResult("Ignored a Camera Roll background activation because scheduled backup is off.");
@@ -64,7 +74,7 @@ namespace LiveDrive.BackgroundTasks
                     "Background task lock acquired", executionTimer.ElapsedMilliseconds + " ms.");
                 var graph = new GraphClient(new OAuthService(new PasswordVaultTokenStore()));
                 var backup = new CameraBackupService(graph, new CameraUploadHistoryStore(), state);
-                var uploadedCount = await backup.UploadPendingCameraRollItemsAsync(cancellation.Token);
+                var uploadedCount = await backup.UploadPendingCameraRollItemsAsync(cancellation.Token, finishedTransfers);
                 await state.AppendDiagnosticAsync(
                     "Background task completed",
                     "Uploaded " + uploadedCount + " item(s) in " + executionTimer.ElapsedMilliseconds + " ms.");
