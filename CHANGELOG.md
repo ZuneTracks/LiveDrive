@@ -6,6 +6,10 @@ All notable user-facing changes are documented here.
 
 ### Improvements
 
+- Scheduled Camera Roll backup now uploads several items per background check within its
+  time budget instead of stopping after one, sends large photos and videos in 1.25 MB
+  chunks instead of 320 KB, stops before starting a chunk that would not finish in time,
+  and skips the duplicate check when resuming an in-progress upload.
 - Returning to a cached Photos or Videos page now preserves its displayed grid while
   LiveDrive checks OneDrive for changes; the grid updates only when that check changes
   the media currently being shown, while thumbnail warm-up continues for uncached

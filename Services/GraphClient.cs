@@ -348,7 +348,8 @@ namespace LiveDrive.Services
                     parentId, file, properties.Size, modified, renameOnConflict, failOnConflict, cancellationToken);
             }
 
-            const int chunkSize = 320 * 1024;
+            // Graph requires multiples of 320 KiB; larger chunks cut round trips on Mobile networks.
+            const int chunkSize = 4 * 320 * 1024;
             using (var stream = await file.OpenStreamForReadAsync())
             {
                 stream.Seek(session.NextOffset, SeekOrigin.Begin);
