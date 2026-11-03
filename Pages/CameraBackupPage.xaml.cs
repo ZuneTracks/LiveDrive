@@ -104,6 +104,7 @@ namespace LiveDrive.Pages
                     _isRefreshingBackupStatus = true;
                     _isInitializingScheduledBackup = true;
                     ScheduledBackupToggle.IsOn = _services.CameraBackupScheduler.IsEnabled;
+                    CellularBackupToggle.IsOn = _services.CameraBackupState.IsCellularBackupAllowed;
                     _isInitializingScheduledBackup = false;
                     if (shouldRefreshScheduledStatus)
                     {
@@ -142,19 +143,31 @@ namespace LiveDrive.Pages
             var retryStatesByPath = retryStates.ToDictionary(
                 state => state.FilePath, StringComparer.OrdinalIgnoreCase);
             var uploadSession = await _services.CameraBackupState.LoadUploadSessionAsync();
+            IDictionary<string, string> transferStatuses;
+            try
+            {
+                transferStatuses = await _services.CameraBackup.GetBackgroundTransferStatusesAsync();
+            }
+            catch (Exception)
+            {
+                transferStatuses = new Dictionary<string, string>();
+            }
             var now = DateTimeOffset.UtcNow;
             return pendingPaths.Select(path =>
             {
                 CameraBackupRetryState retryState;
                 retryStatesByPath.TryGetValue(path, out retryState);
+                string transferStatus;
+                transferStatuses.TryGetValue(path, out transferStatus);
                 return new ScheduledBackupQueueItem
                 {
                     Path = path,
                     Name = Path.GetFileName(path),
-                    Status = GetScheduledQueueItemStatus(path, retryState, uploadSession, now),
+                    Status = transferStatus ?? GetScheduledQueueItemStatus(path, retryState, uploadSession, now),
                     IsLargeUploadInProgress = uploadSession != null && string.Equals(
                         uploadSession.FilePath, path, StringComparison.OrdinalIgnoreCase),
-                    IsAwaitingRetry = retryState != null && retryState.NextRetryUtc > now
+                    IsBackgroundTransferActive = transferStatus != null,
+                    IsAwaitingRetry = transferStatus == null && retryState != null && retryState.NextRetryUtc > now
                 };
             }).ToList();
         }
@@ -197,6 +210,14 @@ namespace LiveDrive.Pages
             {
                 BackupHealthStatus.Text =
                     "Action: leave scheduled backup on while LiveDrive restores its Windows task.";
+                return;
+            }
+
+            var transferCount = scheduledQueueItems.Count(item => item.IsBackgroundTransferActive);
+            if (transferCount > 0)
+            {
+                BackupHealthStatus.Text = "Windows is uploading " + transferCount + " item" +
+                    (transferCount == 1 ? "" : "s") + " in the background. Open Scheduled backup queue for progress.";
                 return;
             }
 
@@ -453,6 +474,7 @@ namespace LiveDrive.Pages
                 else
                 {
                     _services.CameraBackupScheduler.Disable();
+                    await _services.CameraBackup.CancelBackgroundTransfersAsync();
                 }
             }
             catch (Exception exception)
@@ -469,6 +491,26 @@ namespace LiveDrive.Pages
                 ScheduledBackupToggle.IsEnabled = true;
                 await RefreshBackupStatusAsync(!ScheduledBackupToggle.IsOn);
             }
+        }
+
+        private async void CellularBackupToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializingScheduledBackup)
+            {
+                return;
+            }
+
+            try
+            {
+                await _services.CameraBackup.ApplyCellularPreferenceAsync(CellularBackupToggle.IsOn);
+                await _services.CameraBackupState.AppendDiagnosticAsync(
+                    "Cellular backup preference changed", CellularBackupToggle.IsOn ? "Allowed." : "Wi-Fi only.");
+            }
+            catch (Exception exception)
+            {
+                await PageFeedback.ShowErrorAsync(exception);
+            }
+            await RefreshBackupStatusAsync();
         }
 
         private string GetScheduledBackupStatus()
@@ -569,6 +611,9 @@ namespace LiveDrive.Pages
             summary.AppendLine("Queue: " + queueItems.Count + " total; " + readyCount + " ready; " +
                 deferredCount + " deferred." +
                 (largeUpload == null ? string.Empty : " Resumable upload: " + largeUpload.Status));
+            summary.AppendLine("Background Transfer: " +
+                queueItems.Count(item => item.IsBackgroundTransferActive) + " active; cellular data " +
+                (state.IsCellularBackupAllowed ? "allowed." : "not allowed (Wi-Fi only)."));
             summary.AppendLine("Last outcome: " + FormatDiagnosticValue(
                 state.GetLastResult(), "not recorded."));
             summary.AppendLine();

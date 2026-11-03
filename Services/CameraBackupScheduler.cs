@@ -137,7 +137,8 @@ namespace LiveDrive.Services
         private static void UnregisterTasks(bool cancelRunning)
         {
             foreach (var task in BackgroundTaskRegistration.AllTasks.Values.Where(task =>
-                task.Name == TaskName || task.Name == InitialTaskName))
+                task.Name == TaskName || task.Name == InitialTaskName ||
+                task.Name == CameraTransferService.CompletionTaskName))
             {
                 task.Unregister(cancelRunning);
             }

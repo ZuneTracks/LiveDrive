@@ -388,6 +388,15 @@ namespace LiveDrive.Services
             }
         }
 
+        public async Task<CameraUploadSessionState> CreateFileUploadSessionAsync(
+            string parentId, StorageFile file, bool failOnConflict, CancellationToken cancellationToken)
+        {
+            var properties = await file.GetBasicPropertiesAsync();
+            return await CreateUploadSessionAsync(
+                parentId, file, properties.Size, properties.DateModified.ToString("o"),
+                false, failOnConflict, cancellationToken);
+        }
+
         private async Task<CameraUploadSessionState> CreateUploadSessionAsync(
             string parentId, StorageFile file, ulong size, string modified,
             bool renameOnConflict, bool failOnConflict, CancellationToken cancellationToken)

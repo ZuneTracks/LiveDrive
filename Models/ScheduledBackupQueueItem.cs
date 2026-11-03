@@ -6,6 +6,7 @@ namespace LiveDrive.Models
         public string Name { get; set; }
         public string Status { get; set; }
         public bool IsLargeUploadInProgress { get; set; }
+        public bool IsBackgroundTransferActive { get; set; }
         public bool IsAwaitingRetry { get; set; }
     }
 }
