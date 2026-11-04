@@ -30,7 +30,7 @@
                                 </Grid.ColumnDefinitions>
                                 <Grid Width="60" Height="60">
                                     <SymbolIcon Symbol="Pictures" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
-                                    <Image helpers:ThumbnailImage.Uri="{Binding CoverThumbnailUrl}"
+                                    <Image helpers:ThumbnailImage.Uri="{x:Bind CoverThumbnailUrl, Mode=OneWay}" x:Phase="1"
                                            Stretch="UniformToFill"/>
                                 </Grid>
                                 <StackPanel Grid.Column="1" Margin="12,0">
