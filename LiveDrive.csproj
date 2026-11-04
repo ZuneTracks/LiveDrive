@@ -132,7 +132,7 @@
     <Compile Include="Helpers\FileInfoDialog.cs" />
     <Compile Include="Helpers\OneDriveFolderPicker.cs" />
     <Compile Include="Helpers\PageFeedback.cs" />
-    <Compile Include="Helpers\ThumbnailConverter.cs" />
+    <Compile Include="Helpers\ThumbnailImage.cs" />
     <Compile Include="Models\AuthToken.cs" />
     <Compile Include="Models\BackupItem.cs" />
     <Compile Include="Models\CameraBackupRetryState.cs" />

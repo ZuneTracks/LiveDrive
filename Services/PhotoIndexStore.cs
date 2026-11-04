@@ -25,6 +25,12 @@ namespace LiveDrive.Services
         private readonly SemaphoreSlim _thumbnailFileLock = new SemaphoreSlim(1, 1);
         private readonly Dictionary<string, DriveItem> _pendingEnsuredItems =
             new Dictionary<string, DriveItem>(StringComparer.Ordinal);
+        private const string PartialThumbnailSuffix = ".partial";
+        private readonly object _cachedThumbnailSync = new object();
+        private HashSet<string> _cachedThumbnailFiles;
+        private ulong? _cachedThumbnailBytes;
+        private static readonly Dictionary<string, string> ThumbnailFileNames =
+            new Dictionary<string, string>(StringComparer.Ordinal);
 
         public async Task<PhotoIndexSnapshot> LoadAsync()
         {
@@ -177,11 +183,8 @@ namespace LiveDrive.Services
             await _thumbnailFileLock.WaitAsync(cancellationToken);
             try
             {
-                var existingUri = await GetLocalThumbnailUriAsync(item.Id, true);
-                if (string.IsNullOrEmpty(existingUri) && !preferLarge)
-                {
-                    existingUri = await GetLocalThumbnailUriAsync(item.Id, false);
-                }
+                await EnsureCachedThumbnailFilesAsync();
+                var existingUri = GetBestCachedThumbnailUri(item.Id, preferLarge);
                 if (!string.IsNullOrEmpty(existingUri))
                 {
                     item.ThumbnailUrl = existingUri;
@@ -200,8 +203,10 @@ namespace LiveDrive.Services
             }
 
             item.ThumbnailUrl = remoteUri;
+            var fileName = GetThumbnailFileName(item.Id, preferLarge);
             var file = await (await GetThumbnailsFolderAsync()).CreateFileAsync(
-                GetThumbnailFileName(item.Id, preferLarge), CreationCollisionOption.ReplaceExisting);
+                fileName + PartialThumbnailSuffix, CreationCollisionOption.ReplaceExisting);
+            var renamed = false;
             try
             {
                 if (!await graph.DownloadThumbnailAsync(remoteUri, file, cancellationToken))
@@ -214,12 +219,34 @@ namespace LiveDrive.Services
                 await _thumbnailFileLock.WaitAsync(cancellationToken);
                 try
                 {
+                    var size = (await file.GetBasicPropertiesAsync()).Size;
+                    if (size == 0)
+                    {
+                        await file.DeleteAsync();
+                        item.ThumbnailUrl = string.Empty;
+                        return;
+                    }
+
+                    await file.RenameAsync(fileName, NameCollisionOption.ReplaceExisting);
+                    renamed = true;
+                    await EnsureCachedThumbnailFilesAsync();
+                    lock (_cachedThumbnailSync)
+                    {
+                        _cachedThumbnailFiles.Add(fileName);
+                        if (_cachedThumbnailBytes.HasValue)
+                        {
+                            _cachedThumbnailBytes += size;
+                        }
+                    }
                     if (preferLarge)
                     {
                         await RemoveLocalThumbnailAsync(item.Id, false);
                     }
-                    await TrimThumbnailsCoreAsync();
-                    item.ThumbnailUrl = await GetBestCachedThumbnailUriAsync(item.Id);
+                    if (!_cachedThumbnailBytes.HasValue || _cachedThumbnailBytes.Value > ThumbnailCacheLimit)
+                    {
+                        await TrimThumbnailsCoreAsync();
+                    }
+                    item.ThumbnailUrl = GetBestCachedThumbnailUri(item.Id, false);
                 }
                 finally
                 {
@@ -228,9 +255,43 @@ namespace LiveDrive.Services
             }
             catch
             {
-                await file.DeleteAsync();
+                if (!renamed)
+                {
+                    try
+                    {
+                        await file.DeleteAsync();
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
                 throw;
             }
+        }
+
+        public bool TryApplyCachedThumbnail(DriveItem item, bool requireLarge)
+        {
+            if (item == null || string.IsNullOrEmpty(item.Id))
+            {
+                return false;
+            }
+
+            lock (_cachedThumbnailSync)
+            {
+                if (_cachedThumbnailFiles == null)
+                {
+                    return false;
+                }
+            }
+
+            var uri = GetBestCachedThumbnailUri(item.Id, requireLarge);
+            if (string.IsNullOrEmpty(uri))
+            {
+                return false;
+            }
+
+            item.ThumbnailUrl = uri;
+            return true;
         }
 
         public async Task RestoreCachedThumbnailUrisAsync(
@@ -239,20 +300,14 @@ namespace LiveDrive.Services
             await _thumbnailFileLock.WaitAsync(cancellationToken);
             try
             {
-                var cachedFileNames = new HashSet<string>(
-                    (await (await GetThumbnailsFolderAsync()).GetFilesAsync()).Select(file => file.Name),
-                    StringComparer.OrdinalIgnoreCase);
+                await EnsureCachedThumbnailFilesAsync();
                 foreach (var item in items)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var largeFileName = GetThumbnailFileName(item.Id, true);
-                    if (cachedFileNames.Contains(largeFileName))
+                    var uri = GetBestCachedThumbnailUri(item.Id, false);
+                    if (!string.IsNullOrEmpty(uri))
                     {
-                        item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, true);
-                    }
-                    else if (cachedFileNames.Contains(GetThumbnailFileName(item.Id, false)))
-                    {
-                        item.ThumbnailUrl = GetLocalThumbnailUri(item.Id, false);
+                        item.ThumbnailUrl = uri;
                     }
                 }
             }
@@ -268,7 +323,8 @@ namespace LiveDrive.Services
             await _thumbnailFileLock.WaitAsync(cancellationToken);
             try
             {
-                var uri = await GetBestCachedThumbnailUriAsync(item.Id);
+                await EnsureCachedThumbnailFilesAsync();
+                var uri = GetBestCachedThumbnailUri(item.Id, false);
                 if (!string.IsNullOrEmpty(uri))
                 {
                     item.ThumbnailUrl = uri;
@@ -301,9 +357,11 @@ namespace LiveDrive.Services
                 var folder = await GetThumbnailsFolderAsync();
                 foreach (var preferLarge in new[] { false, true })
                 {
+                    var fileName = GetThumbnailFileName(itemId, preferLarge);
+                    ForgetCachedThumbnail(fileName);
                     try
                     {
-                        await (await folder.GetFileAsync(GetThumbnailFileName(itemId, preferLarge))).DeleteAsync();
+                        await (await folder.GetFileAsync(fileName)).DeleteAsync();
                     }
                     catch (FileNotFoundException)
                     {
@@ -345,6 +403,11 @@ namespace LiveDrive.Services
                 await _thumbnailFileLock.WaitAsync();
                 try
                 {
+                    lock (_cachedThumbnailSync)
+                    {
+                        _cachedThumbnailFiles = null;
+                        _cachedThumbnailBytes = null;
+                    }
                     try
                     {
                         await (await ApplicationData.Current.LocalFolder.GetFolderAsync(CacheFolderName)).DeleteAsync();
@@ -364,42 +427,83 @@ namespace LiveDrive.Services
             }
         }
 
-        private async Task<string> GetLocalThumbnailUriAsync(string itemId, bool preferLarge)
+        private async Task EnsureCachedThumbnailFilesAsync()
         {
-            try
+            lock (_cachedThumbnailSync)
             {
-                var file = await (await GetThumbnailsFolderAsync()).GetFileAsync(GetThumbnailFileName(itemId, preferLarge));
-                if ((await file.GetBasicPropertiesAsync()).Size == 0)
+                if (_cachedThumbnailFiles != null)
                 {
-                    await file.DeleteAsync();
-                    return string.Empty;
+                    return;
+                }
+            }
+
+            var files = await (await GetThumbnailsFolderAsync()).GetFilesAsync();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in files)
+            {
+                if (!file.Name.EndsWith(PartialThumbnailSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    names.Add(file.Name);
+                    continue;
                 }
 
-                return GetLocalThumbnailUri(itemId, preferLarge);
+                // Left behind when the app was closed mid-download.
+                try
+                {
+                    await file.DeleteAsync();
+                }
+                catch (Exception)
+                {
+                }
             }
-            catch (FileNotFoundException)
+            lock (_cachedThumbnailSync)
             {
-                return string.Empty;
+                if (_cachedThumbnailFiles == null)
+                {
+                    _cachedThumbnailFiles = names;
+                }
             }
         }
 
-        private async Task<string> GetBestCachedThumbnailUriAsync(string itemId)
+        private string GetBestCachedThumbnailUri(string itemId, bool requireLarge)
         {
-            var largeUri = await GetLocalThumbnailUriAsync(itemId, true);
-            if (!string.IsNullOrEmpty(largeUri))
+            var largeFileName = GetThumbnailFileName(itemId, true);
+            var smallFileName = requireLarge ? null : GetThumbnailFileName(itemId, false);
+            lock (_cachedThumbnailSync)
             {
-                return largeUri;
+                if (_cachedThumbnailFiles == null)
+                {
+                    return string.Empty;
+                }
+                if (_cachedThumbnailFiles.Contains(largeFileName))
+                {
+                    return GetLocalThumbnailUri(itemId, true);
+                }
+                if (smallFileName != null && _cachedThumbnailFiles.Contains(smallFileName))
+                {
+                    return GetLocalThumbnailUri(itemId, false);
+                }
             }
 
-            return await GetLocalThumbnailUriAsync(itemId, false);
+            return string.Empty;
+        }
+
+        private void ForgetCachedThumbnail(string fileName)
+        {
+            lock (_cachedThumbnailSync)
+            {
+                _cachedThumbnailFiles?.Remove(fileName);
+            }
         }
 
         private async Task RemoveLocalThumbnailAsync(string itemId, bool preferLarge)
         {
+            var fileName = GetThumbnailFileName(itemId, preferLarge);
+            ForgetCachedThumbnail(fileName);
             try
             {
                 var folder = await GetThumbnailsFolderAsync();
-                await (await folder.GetFileAsync(GetThumbnailFileName(itemId, preferLarge))).DeleteAsync();
+                await (await folder.GetFileAsync(fileName)).DeleteAsync();
             }
             catch (FileNotFoundException)
             {
@@ -416,11 +520,16 @@ namespace LiveDrive.Services
             ulong totalSize = 0;
             foreach (var file in files)
             {
+                if (file.Name.EndsWith(PartialThumbnailSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
                 var properties = await file.GetBasicPropertiesAsync();
                 sizedFiles.Add(Tuple.Create(file, properties.Size, file.DateCreated));
                 totalSize += properties.Size;
             }
 
+            var remaining = new HashSet<string>(sizedFiles.Select(entry => entry.Item1.Name), StringComparer.OrdinalIgnoreCase);
             foreach (var file in sizedFiles
                 .OrderBy(entry => entry.Item1.Name.EndsWith(".large.jpg", StringComparison.OrdinalIgnoreCase))
                 .ThenBy(entry => entry.Item3))
@@ -433,10 +542,17 @@ namespace LiveDrive.Services
                 {
                     await file.Item1.DeleteAsync();
                     totalSize -= file.Item2;
+                    remaining.Remove(file.Item1.Name);
                 }
                 catch (IOException)
                 {
                 }
+            }
+
+            lock (_cachedThumbnailSync)
+            {
+                _cachedThumbnailFiles = remaining;
+                _cachedThumbnailBytes = totalSize;
             }
         }
 
@@ -488,11 +604,21 @@ namespace LiveDrive.Services
 
         private static string GetThumbnailFileName(string itemId, bool preferLarge)
         {
-            using (var sha256 = SHA256.Create())
+            string baseName;
+            lock (ThumbnailFileNames)
             {
-                var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(itemId));
-                return BitConverter.ToString(hash).Replace("-", string.Empty) + (preferLarge ? ".large.jpg" : ".jpg");
+                if (!ThumbnailFileNames.TryGetValue(itemId, out baseName))
+                {
+                    using (var sha256 = SHA256.Create())
+                    {
+                        var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(itemId));
+                        baseName = BitConverter.ToString(hash).Replace("-", string.Empty);
+                    }
+                    ThumbnailFileNames[itemId] = baseName;
+                }
             }
+
+            return baseName + (preferLarge ? ".large.jpg" : ".jpg");
         }
 
         private static async Task<StorageFolder> GetCacheFolderAsync()
