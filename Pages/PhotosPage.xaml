@@ -99,7 +99,7 @@
                            <Border Background="{ThemeResource PhotoTileBackgroundBrush}">
                                 <Grid>
                                     <SymbolIcon Symbol="Pictures" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
-                                    <Image helpers:ThumbnailImage.Uri="{Binding ThumbnailUrl}"
+                                    <Image helpers:ThumbnailImage.Uri="{x:Bind ThumbnailUrl, Mode=OneWay}" x:Phase="1"
                                            Stretch="UniformToFill"/>
                                 </Grid>
                             </Border>
