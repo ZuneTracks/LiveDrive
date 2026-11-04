@@ -731,6 +731,11 @@ namespace LiveDrive.Pages
             }
 
             var preferLarge = _hasFullPhotoIndex && _thumbnailSize == "Large";
+            if (_services.PhotoIndex.TryApplyCachedThumbnail(item, preferLarge))
+            {
+                return;
+            }
+
             var cacheKey = item.Id + (preferLarge ? "|large" : "|medium");
             if (_unavailableThumbnailKeys.Contains(cacheKey) || !_queuedThumbnailKeys.Add(cacheKey))
             {

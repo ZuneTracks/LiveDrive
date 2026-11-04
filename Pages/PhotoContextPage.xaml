@@ -5,7 +5,6 @@
     xmlns:helpers="using:LiveDrive.Helpers"
     xmlns:models="using:LiveDrive.Models">
     <Page.Resources>
-        <helpers:ThumbnailConverter x:Key="ThumbnailConverter"/>
         <DataTemplate x:Key="AlbumPickerItemTemplate">
             <Border Padding="12,10">
                 <TextBlock Text="{Binding Name}"
@@ -100,7 +99,7 @@
                            <Border Background="{ThemeResource PhotoTileBackgroundBrush}">
                                 <Grid>
                                     <SymbolIcon Symbol="Pictures" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
-                                    <Image Source="{Binding ThumbnailUrl, Converter={StaticResource ThumbnailConverter}}"
+                                    <Image helpers:ThumbnailImage.Uri="{Binding ThumbnailUrl}"
                                            Stretch="UniformToFill"/>
                                 </Grid>
                             </Border>
