@@ -20,6 +20,8 @@ namespace LiveDrive.Services
         Task<IReadOnlyList<DriveItem>> GetChildrenAsync(string folderId);
         Task<bool> ItemExistsAsync(
             string parentId, string name, CancellationToken cancellationToken = default(CancellationToken));
+        Task<long?> GetItemSizeAsync(
+            string parentId, string name, CancellationToken cancellationToken = default(CancellationToken));
         Task<DriveItem> GetOrCreateRootFolderAsync(
             string name, CancellationToken cancellationToken = default(CancellationToken));
         Task<DriveItem> GetRootFolderAsync();

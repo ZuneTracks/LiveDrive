@@ -77,26 +77,35 @@ namespace LiveDrive.Services
 
             var destination = await _graph.GetOrCreateRootFolderAsync(
                 "LiveDrive Camera Roll", cancellationToken);
-            var existingNames = new HashSet<string>(
-                (await _graph.GetChildrenAsync(destination.Id))
-                    .Where(item => !item.IsFolder)
-                    .Select(item => item.Name),
-                StringComparer.OrdinalIgnoreCase);
-            var skippedFiles = pendingFiles
-                .Where(file => existingNames.Contains(file.Name))
-                .ToList();
-            var newNames = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
-            var filesToUpload = new List<StorageFile>();
-            foreach (var file in pendingFiles.Where(file => !existingNames.Contains(file.Name)))
+            var existingSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in (await _graph.GetChildrenAsync(destination.Id)).Where(item => !item.IsFolder))
             {
-                if (newNames.Add(file.Name))
-                {
-                    filesToUpload.Add(file);
-                }
-                else
+                existingSizes[item.Name] = item.Size;
+            }
+            var skippedFiles = new List<StorageFile>();
+            var filesToUpload = new List<StorageFile>();
+            var replacedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var plannedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in pendingFiles)
+            {
+                long remoteSize;
+                var hasRemoteCopy = existingSizes.TryGetValue(file.Name, out remoteSize);
+                if (hasRemoteCopy && MatchesRemoteSize(remoteSize, await GetFileSizeAsync(file)))
                 {
                     skippedFiles.Add(file);
+                    continue;
                 }
+                if (!plannedNames.Add(file.Name))
+                {
+                    skippedFiles.Add(file);
+                    continue;
+                }
+                if (hasRemoteCopy)
+                {
+                    // A same-named copy of a different size is a partial or interrupted upload.
+                    replacedNames.Add(file.Name);
+                }
+                filesToUpload.Add(file);
             }
             foreach (var file in skippedFiles)
             {
@@ -122,12 +131,11 @@ namespace LiveDrive.Services
                         file,
                         new Progress<double>(value => progress?.Report(FormatUploadProgress(file.Name, value))),
                         false,
-                        true);
+                        !replacedNames.Contains(file.Name));
                 }
                 catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
                 {
                     await _state.MarkUploadedAsync(file.Path);
-                    existingNames.Add(file.Name);
                     skippedCount++;
                     reconciledAfterUploadCount++;
                     continue;
@@ -148,7 +156,6 @@ namespace LiveDrive.Services
                 }
                 await _state.MarkUploadedAsync(file.Path);
                 await _history.AddAsync(file.Name);
-                existingNames.Add(file.Name);
                 uploadedCount++;
             }
 
@@ -235,10 +242,16 @@ namespace LiveDrive.Services
                 foreach (var path in pendingPaths.ToList())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (!transfersAvailable ||
-                        transferRecords.Count >= CameraTransferService.MaximumActiveTransfers ||
-                        (startedTransfers + skippedCount > 0 &&
-                         GetRemainingBackgroundTime(activationStarted) < MinimumTimeToStartAnotherItem))
+                    var canStartTransfer = transfersAvailable &&
+                        transferRecords.Count < CameraTransferService.MaximumActiveTransfers &&
+                        (startedTransfers + skippedCount == 0 ||
+                         GetRemainingBackgroundTime(activationStarted) >= MinimumTimeToStartAnotherItem);
+                    // Once no further transfer can start, keep scanning just long enough to find
+                    // an item the chunked uploader must handle. Stopping here instead would hide
+                    // large videos from the chunked loop on every run that fills the transfer slots.
+                    if (!canStartTransfer &&
+                        (inProcessPaths.Count > 0 ||
+                         GetRemainingBackgroundTime(activationStarted) <= TimeSpan.Zero))
                     {
                         break;
                     }
@@ -263,17 +276,27 @@ namespace LiveDrive.Services
                     {
                         // Videos of 60 MiB or more use LiveDrive's resumable chunked uploader.
                         inProcessPaths.Add(path);
+                        await _state.AppendDiagnosticAsync(
+                            "Camera Roll item queued for chunked upload",
+                            file.Name + " is " + FormatSize(size) + ", too large for Background Transfer.");
+                        continue;
+                    }
+                    if (!canStartTransfer)
+                    {
                         continue;
                     }
 
                     destinationFolderId = await EnsureDestinationFolderIdAsync(destinationFolderId, cancellationToken);
+                    var remoteSize = await _graph.GetItemSizeAsync(
+                        destinationFolderId, file.Name, cancellationToken);
                     CameraUploadSessionState session = null;
-                    if (!await _graph.ItemExistsAsync(destinationFolderId, file.Name, cancellationToken))
+                    if (!MatchesRemoteSize(remoteSize, size))
                     {
                         try
                         {
+                            // A same-named copy of a different size is incomplete; replace it.
                             session = await _graph.CreateFileUploadSessionAsync(
-                                destinationFolderId, file, true, cancellationToken);
+                                destinationFolderId, file, !remoteSize.HasValue, cancellationToken);
                         }
                         catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
                         {
@@ -380,24 +403,38 @@ namespace LiveDrive.Services
                 // A resumed session was already checked for a remote duplicate when it started.
                 var isResumingSession = uploadSession != null && string.Equals(
                     uploadSession.FilePath, file.Path, StringComparison.OrdinalIgnoreCase);
-                if (!isResumingSession &&
-                    await _graph.ItemExistsAsync(destinationFolderId, file.Name, cancellationToken))
+                var localSize = (await file.GetBasicPropertiesAsync()).Size;
+                var replaceRemoteCopy = false;
+                if (!isResumingSession)
                 {
-                    await _state.MarkUploadedAsync(file.Path);
-                    await _state.AppendDiagnosticAsync(
-                        "Camera Roll item reconciled", file.Name + " already exists in OneDrive.");
-                    retryStates.Remove(path);
-                    RemovePendingPath(pendingPaths, path);
-                    await _state.SavePendingPathsAsync(pendingPaths);
-                    await _state.SavePendingRetryStatesAsync(retryStates.Values);
-                    skippedCount++;
-                    continue;
+                    var remoteSize = await _graph.GetItemSizeAsync(
+                        destinationFolderId, file.Name, cancellationToken);
+                    if (MatchesRemoteSize(remoteSize, localSize))
+                    {
+                        await _state.MarkUploadedAsync(file.Path);
+                        await _state.AppendDiagnosticAsync(
+                            "Camera Roll item reconciled", file.Name + " already exists in OneDrive.");
+                        retryStates.Remove(path);
+                        RemovePendingPath(pendingPaths, path);
+                        await _state.SavePendingPathsAsync(pendingPaths);
+                        await _state.SavePendingRetryStatesAsync(retryStates.Values);
+                        skippedCount++;
+                        continue;
+                    }
+                    if (remoteSize.HasValue)
+                    {
+                        // A same-named copy of a different size is a partial or interrupted upload.
+                        replaceRemoteCopy = true;
+                        await _state.AppendDiagnosticAsync(
+                            "Camera Roll item replaced", file.Name + " exists in OneDrive at " +
+                            FormatSize((ulong)Math.Max(0, remoteSize.Value)) + " but is " +
+                            FormatSize(localSize) + " on this device.");
+                    }
                 }
 
                 try
                 {
-                    var properties = await file.GetBasicPropertiesAsync();
-                    if (properties.Size > 4 * 1024 * 1024)
+                    if (localSize > 4 * 1024 * 1024)
                     {
                         if (uploadSession != null && !isResumingSession)
                         {
@@ -422,7 +459,7 @@ namespace LiveDrive.Services
                                 if (uploadSession != null)
                                 {
                                     continuationNote = await SaveLargeUploadProgressAsync(
-                                        file.Name, uploadSession, properties.Size, chunksUploaded);
+                                        file.Name, uploadSession, localSize, chunksUploaded);
                                 }
                                 stopRun = true;
                                 break;
@@ -430,7 +467,7 @@ namespace LiveDrive.Services
 
                             var chunkTimer = Stopwatch.StartNew();
                             var result = await _graph.UploadLargeFileChunkAsync(
-                                destinationFolderId, file, uploadSession, false, true, cancellationToken,
+                                destinationFolderId, file, uploadSession, false, !replaceRemoteCopy, cancellationToken,
                                 refreshSessionOffset);
                             lastChunkDuration = chunkTimer.Elapsed;
                             _state.SaveLastLargeUploadChunkDuration(chunkTimer.Elapsed);
@@ -454,7 +491,7 @@ namespace LiveDrive.Services
                     }
                     else
                     {
-                        await _graph.UploadAsync(destinationFolderId, file, null, false, true, cancellationToken);
+                        await _graph.UploadAsync(destinationFolderId, file, null, false, !replaceRemoteCopy, cancellationToken);
                     }
                 }
                 catch (Exception exception) when (IsNameAlreadyExistsConflict(exception))
@@ -823,6 +860,36 @@ namespace LiveDrive.Services
             return exception is InvalidOperationException &&
                 exception.Message.IndexOf("(409)", StringComparison.Ordinal) >= 0 &&
                 exception.Message.IndexOf("nameAlreadyExists", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        // A remote copy only counts as already uploaded when its size matches the local file.
+        // Matching on name alone hides partial or interrupted uploads, and because every caller
+        // then records the item as uploaded, the skip becomes permanent.
+        internal static bool MatchesRemoteSize(long? remoteSize, ulong localSize)
+        {
+            return remoteSize.HasValue && remoteSize.Value >= 0 && (ulong)remoteSize.Value == localSize;
+        }
+
+        internal static async Task<ulong> GetFileSizeAsync(StorageFile file)
+        {
+            return (await file.GetBasicPropertiesAsync()).Size;
+        }
+
+        internal static string FormatSize(ulong size)
+        {
+            if (size >= 1024UL * 1024 * 1024)
+            {
+                return (size / (1024.0 * 1024 * 1024)).ToString("0.##") + " GB";
+            }
+            if (size >= 1024UL * 1024)
+            {
+                return (size / (1024.0 * 1024)).ToString("0.##") + " MB";
+            }
+            if (size >= 1024UL)
+            {
+                return (size / 1024.0).ToString("0.##") + " KB";
+            }
+            return size + " bytes";
         }
 
         private static string FormatFailure(string fileName, Exception exception)
