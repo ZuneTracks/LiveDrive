@@ -518,6 +518,23 @@ namespace LiveDrive.Services
             }
         }
 
+        public async Task<long?> GetItemSizeAsync(
+            string parentId, string name, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var path = "/me/drive/items/" + Uri.EscapeDataString(parentId) + ":/" +
+                Uri.EscapeDataString(name) + "?$select=id,size";
+            using (var response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, path),
+                HttpCompletionOption.ResponseContentRead, true, cancellationToken))
+            {
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return null;
+                }
+                var json = JsonObject.Parse(await response.Content.ReadAsStringAsync());
+                return (long)json.GetNamedNumber("size", 0);
+            }
+        }
+
         public async Task DownloadToAsync(DriveItem item, StorageFile destination)
         {
             using (var response = await SendAsync(new HttpRequestMessage(HttpMethod.Get,

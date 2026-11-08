@@ -740,18 +740,22 @@ namespace LiveDrive.Pages
             try
             {
                 var destination = await _services.Graph.GetOrCreateRootFolderAsync("LiveDrive Camera Roll");
-                var existingNames = new HashSet<string>(
-                    (await _services.Graph.GetChildrenAsync(destination.Id))
-                        .Where(item => !item.IsFolder)
-                        .Select(item => item.Name),
-                    StringComparer.OrdinalIgnoreCase);
+                var existingSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in (await _services.Graph.GetChildrenAsync(destination.Id))
+                    .Where(item => !item.IsFolder))
+                {
+                    existingSizes[item.Name] = item.Size;
+                }
                 var totalFiles = _files.Count;
                 var completedFiles = 0;
                 var skippedFiles = 0;
                 while (_files.Count > 0)
                 {
                     var file = _files[0];
-                    if (existingNames.Contains(file.Name))
+                    long remoteSize;
+                    var hasRemoteCopy = existingSizes.TryGetValue(file.Name, out remoteSize);
+                    if (hasRemoteCopy && CameraBackupService.MatchesRemoteSize(
+                        remoteSize, await CameraBackupService.GetFileSizeAsync(file)))
                     {
                         Queue[0].Status = "Already uploaded";
                         await _services.CameraBackupState.MarkUploadedAsync(file.Path);
@@ -774,13 +778,13 @@ namespace LiveDrive.Pages
                     });
                     try
                     {
-                        await _services.Graph.UploadAsync(destination.Id, file, progress, false, true);
+                        await _services.Graph.UploadAsync(destination.Id, file, progress, false, !hasRemoteCopy);
                     }
                     catch (Exception exception) when (CameraBackupService.IsNameAlreadyExistsConflict(exception))
                     {
                         Queue[0].Status = "Already uploaded";
                         await _services.CameraBackupState.MarkUploadedAsync(file.Path);
-                        existingNames.Add(file.Name);
+                        existingSizes[file.Name] = remoteSize;
                         _files.RemoveAt(0);
                         Queue.RemoveAt(0);
                         skippedFiles++;
@@ -788,7 +792,7 @@ namespace LiveDrive.Pages
                     }
                     await _services.CameraBackupState.MarkUploadedAsync(file.Path);
                     await _services.CameraUploadHistory.AddAsync(file.Name);
-                    existingNames.Add(file.Name);
+                    existingSizes[file.Name] = (long)await CameraBackupService.GetFileSizeAsync(file);
                     RecentlyUploaded.Insert(0, new BackupItem { Name = file.Name, Status = "Uploaded" });
                     if (RecentlyUploaded.Count > 50)
                     {
